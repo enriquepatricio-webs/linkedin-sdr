@@ -128,6 +128,9 @@ Aquí hacemos lo mismo:
 - El servidor usa todas esas cookies (`bcookie`, `bscookie`, `lidc`...) y el mismo user agent e idioma del navegador:
   un `li_at` suelto desde otra máquina es lo que LinkedIn trata como sesión robada. Si llega la misma sesión ya
   comprobada no se llama a LinkedIn; si llega otra cuenta distinta se rechaza.
+- La sesión vive en el servidor, como en WaLead: cada respuesta de LinkedIn que renueva cookies (`lidc`,
+  `JSESSIONID`, a veces `li_at`) se guarda en `sdr_settings.li_cookies`, igual que haría un navegador. El ordenador de
+  Enrique puede estar apagado; la extensión sólo hace falta para conectar o reconectar.
 - Proxy: el campo de Ajustes acepta `http://usuario:clave@host:puerto`. Con un proxy residencial o ISP en España la
   conexión del servidor se parece a la de Enrique, que es lo que evita los cierres de sesión.
 

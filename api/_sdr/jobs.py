@@ -39,6 +39,7 @@ class SDR:
         self._client_factory = client_factory
         self._api = None
         self._settings = None
+        self._cookies_saved_at = None
 
     # ---------- utilidades ----------
 
@@ -52,7 +53,32 @@ class SDR:
     def api(self):
         if self._api is None:
             self._api = self._client_factory(self.settings)
+            if hasattr(getattr(self._api, "client", None), "session"):
+                li.watch_cookies(self._api, self.remember_cookies)
         return self._api
+
+    def remember_cookies(self, fresh: Dict) -> None:
+        """Guarda las cookies que LinkedIn renueva. La sesión vive en el servidor (como en WaLead):
+        la extensión sólo hace falta para conectarla o reconectarla, no para que el SDR funcione."""
+        s = self.settings
+        stored = {**(s.get("li_cookies") or {}), "li_at": s.get("li_at"), "JSESSIONID": f'"{(s.get("jsessionid") or "").strip(chr(34))}"'}
+        fresh = li.clean_cookies({k: v for k, v in fresh.items() if v != "delete me"})
+        changed = {k: v for k, v in fresh.items() if stored.get(k) != v}
+        if not changed:
+            return
+        critical = "li_at" in changed or "JSESSIONID" in changed
+        now = _now()
+        if not critical and self._cookies_saved_at and now - self._cookies_saved_at < timedelta(minutes=2):
+            return
+        cookies = {**(s.get("li_cookies") or {}), **fresh}
+        values = {"li_cookies": cookies, "li_cookies_refreshed_at": _iso(now)}
+        if fresh.get("li_at"):
+            values["li_at"] = fresh["li_at"]
+        if fresh.get("JSESSIONID"):
+            values["jsessionid"] = fresh["JSESSIONID"].strip('"')
+        self.db.update("sdr_settings", {"id": "eq.1"}, values)
+        self._settings = {**s, **values}
+        self._cookies_saved_at = now
 
     def log(self, type_: str, detail: str = "", lead_id=None, campaign_id=None, data=None):
         self.db.insert(

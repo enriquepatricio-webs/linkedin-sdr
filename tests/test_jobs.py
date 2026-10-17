@@ -473,3 +473,33 @@ def test_extension_zip_is_up_to_date():
         with open(os.path.join(root, "extension", name), "rb") as f:
             files[name] = f.read()
     assert packed == files, "Ejecuta scripts/pack-extension.sh"
+
+
+def test_server_keeps_rotated_cookies(env):
+    import requests
+
+    db, _ = env
+    db.update("sdr_settings", {"id": "eq.1"}, {"li_at": "AQE", "jsessionid": "ajax:1", "li_cookies": {"bcookie": "b", "lidc": "viejo"}})
+    s = SDR(db=db, client_factory=li.make_client)
+    session = s.api.client.session
+
+    def respond(**cookies):
+        res = requests.Response()
+        for k, v in cookies.items():
+            res.cookies.set(k, v, domain=".linkedin.com")
+        for hook in session.hooks["response"]:
+            hook(res)
+
+    respond(lidc="nuevo")
+    row = db.one("sdr_settings", {"id": "eq.1"})
+    assert row["li_cookies"]["lidc"] == "nuevo" and row["li_cookies"]["bcookie"] == "b" and row["li_cookies_refreshed_at"]
+
+    respond(lidc="otro")  # cambio menor en la misma ronda: no se escribe otra vez
+    assert db.one("sdr_settings", {"id": "eq.1"})["li_cookies"]["lidc"] == "nuevo"
+
+    respond(JSESSIONID='"ajax:2"', li_at="AQEnuevo")  # cambios de sesión: se guardan siempre
+    row = db.one("sdr_settings", {"id": "eq.1"})
+    assert row["jsessionid"] == "ajax:2" and row["li_at"] == "AQEnuevo" and session.headers["csrf-token"] == "ajax:2"
+
+    respond(li_at="delete me")
+    assert db.one("sdr_settings", {"id": "eq.1"})["li_at"] == "AQEnuevo"

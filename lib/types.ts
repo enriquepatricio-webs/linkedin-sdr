@@ -47,6 +47,7 @@ export type Settings = {
   li_profile: { name?: string; public_id?: string; urn_id?: string; headline?: string } | null;
   li_session_source: string | null;
   li_session_synced_at: string | null;
+  li_cookies_refreshed_at: string | null;
   engagement_enabled: boolean;
   auto_comment: boolean;
   daily_like_limit: number;

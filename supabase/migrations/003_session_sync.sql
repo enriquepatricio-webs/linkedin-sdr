@@ -9,4 +9,6 @@ alter table public.sdr_settings
   add column if not exists li_accept_language text,
   add column if not exists li_session_source text,
   add column if not exists li_session_synced_at timestamptz,
-  add column if not exists extension_token text;
+  add column if not exists extension_token text,
+  -- cookies que LinkedIn ha renovado en respuestas al servidor (la sesión vive sin el ordenador de Enrique)
+  add column if not exists li_cookies_refreshed_at timestamptz;

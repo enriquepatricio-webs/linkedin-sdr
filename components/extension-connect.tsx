@@ -51,7 +51,7 @@ export function ExtensionConnect() {
       if (!r) return setResult({ ok: false, message: "No se encuentra la extensión. Recarga la página tras instalarla." });
       setResult(
         r.ok
-          ? { ok: true, message: `Conectada${r.profile ? ` como ${r.profile}` : ""}. La sesión se mantendrá sola mientras Chrome tenga LinkedIn abierto.` }
+          ? { ok: true, message: `Conectada${r.profile ? ` como ${r.profile}` : ""}. Ya puedes apagar el ordenador: el SDR sigue trabajando desde el servidor.` }
           : { ok: false, message: r.error ?? "Error" },
       );
       setExt(await ask({ action: "get_version" }));
@@ -70,8 +70,10 @@ export function ExtensionConnect() {
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
       <p className="font-medium text-slate-900">Conexión automática con la extensión de Chrome (como WaLead)</p>
       <p className="mt-1 text-slate-600">
-        La extensión lee la sesión de LinkedIn de tu navegador (todas las cookies y el navegador exacto) y se la pasa al SDR cada vez que cambia.
-        Ya no hay que copiar cookies: si LinkedIn te pide entrar de nuevo, entras en Chrome como siempre y el SDR la recibe en segundos.
+        Igual que WaLead: la extensión le pasa al SDR la sesión de LinkedIn de tu navegador (todas las cookies y el navegador exacto) y a
+        partir de ahí <strong>todo funciona en el servidor, aunque apagues el ordenador</strong>. El servidor guarda las cookies que LinkedIn
+        le va renovando, como haría un navegador. La extensión sólo vuelve a hacer falta si LinkedIn cierra la sesión: entras en LinkedIn en
+        Chrome y se reconecta sola en segundos.
       </p>
       <p className="mt-2">
         Estado:{" "}

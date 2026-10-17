@@ -76,6 +76,23 @@ def make_client(settings: Dict) -> Linkedin:
     return api
 
 
+def watch_cookies(api: Linkedin, on_change) -> None:
+    """Como un navegador: recoge las cookies que LinkedIn renueva en cada respuesta (lidc,
+    JSESSIONID, a veces li_at) para guardarlas y que la sesión siga viva sin el ordenador de Enrique."""
+    session = api.client.session
+
+    def hook(res, *args, **kwargs):
+        fresh = {c.name: c.value for c in res.cookies if c.domain.endswith("linkedin.com") and c.value}
+        if fresh.get("JSESSIONID"):
+            # El token CSRF tiene que seguir al JSESSIONID nuevo o las siguientes llamadas darían 403.
+            session.headers["csrf-token"] = fresh["JSESSIONID"].strip('"')
+        if fresh:
+            on_change(fresh)
+        return res
+
+    session.hooks["response"].append(hook)
+
+
 def _json(res, what: str):
     if res.status_code in (401, 403) or "/login" in (res.url or "") or "/checkpoint" in (res.url or ""):
         # Pistas para distinguir sesión anulada (li_at=delete me) de CSRF o bloqueo de IP.

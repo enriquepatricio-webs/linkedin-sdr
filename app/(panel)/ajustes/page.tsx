@@ -58,6 +58,7 @@ export default async function SettingsPage() {
         <p className="mt-3 text-xs text-slate-500">
           Última sincronización: {fmtDate(s.li_session_synced_at)}
           {s.li_session_source ? ` (${s.li_session_source.startsWith("extension") ? "extensión" : s.li_session_source})` : ""}
+          {" · "}Última renovación de cookies en el servidor: {fmtDate(s.li_cookies_refreshed_at)}
         </p>
         <ActionForm action={saveLinkedInSession} className="mt-4 grid gap-4 md:grid-cols-2">
           <Field
