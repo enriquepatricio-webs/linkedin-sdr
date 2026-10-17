@@ -55,7 +55,7 @@ export async function logout() {
 
 export async function toggleSetting(fd: FormData) {
   const field = str(fd, "field");
-  if (!["engine_enabled", "autopilot", "auto_reply"].includes(field)) return;
+  if (!["engine_enabled", "autopilot", "auto_reply", "engagement_enabled", "auto_comment"].includes(field)) return;
   must(await db().from("sdr_settings").update({ [field]: str(fd, "value") === "true", updated_at: new Date().toISOString() }).eq("id", 1));
   await logManual(`${field} = ${str(fd, "value")}`);
   touch();
@@ -115,6 +115,7 @@ const JOBS: Record<string, string> = {
   "check-connections": "/jobs/check-connections",
   "send-outbox": "/jobs/send-outbox",
   "sync-inbox": "/jobs/sync-inbox",
+  "engage-run": "/jobs/engage-run",
   check: "/linkedin/check",
 };
 
@@ -285,4 +286,61 @@ export async function composeMessage(_: ActionState, fd: FormData): Promise<Acti
   const send = new FormData();
   send.set("id", data.id);
   return sendMessageNow(null, send);
+}
+
+// ---------- interacción con publicaciones ----------
+
+export async function saveEngagementSettings(_: ActionState, fd: FormData): Promise<ActionState> {
+  const { error } = await db()
+    .from("sdr_settings")
+    .update({
+      daily_like_limit: int(fd, "daily_like_limit", 25),
+      daily_comment_limit: int(fd, "daily_comment_limit", 8),
+      engagement_topics: str(fd, "engagement_topics"),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", 1);
+  if (error) return { ok: false, message: error.message };
+  touch();
+  return { ok: true, message: "Guardado" };
+}
+
+export async function approveComment(fd: FormData) {
+  must(
+    await db()
+      .from("sdr_engagements")
+      .update({ comment: str(fd, "comment"), comment_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", str(fd, "id")),
+  );
+  touch();
+}
+
+export async function rejectComment(fd: FormData) {
+  const id = str(fd, "id");
+  const row = must(await db().from("sdr_engagements").select("want_like,liked_at").eq("id", id).single()) as {
+    want_like: boolean;
+    liked_at: string | null;
+  };
+  const likePending = row.want_like && !row.liked_at;
+  must(
+    await db()
+      .from("sdr_engagements")
+      .update({ comment_status: "rejected", status: likePending ? "ready" : "done", updated_at: new Date().toISOString() })
+      .eq("id", id),
+  );
+  touch();
+}
+
+export async function commentNow(_: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "id");
+  must(
+    await db()
+      .from("sdr_engagements")
+      .update({ comment: str(fd, "comment"), comment_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", id),
+  );
+  const r = await py("/jobs/engage-run", { engagement_id: id });
+  touch();
+  if (r.commented) return { ok: true, message: "Comentario publicado" };
+  return { ok: false, message: (r.errors as string[] | undefined)?.[0] ?? describe(r) };
 }

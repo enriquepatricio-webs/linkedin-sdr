@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/aprobaciones", label: "Aprobaciones", badge: true },
   { href: "/leads", label: "Leads" },
   { href: "/campanas", label: "Campañas" },
+  { href: "/interaccion", label: "Interacción" },
   { href: "/actividad", label: "Actividad" },
   { href: "/ajustes", label: "Ajustes" },
 ];

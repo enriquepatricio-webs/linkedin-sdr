@@ -604,3 +604,141 @@ class SDR:
             else:
                 draft = self.save_draft(lead_id, "reply", reply_text)["message_id"]
         return {"ok": True, "intent": intent, "draft_id": draft}
+
+    # ---------- 8. interacción con publicaciones (IA en n8n) ----------
+
+    def _engagement_guard(self, force: bool, need_hours: bool) -> Optional[str]:
+        reason = self._guard(force, need_hours=need_hours)
+        if reason:
+            return reason
+        if not force and not self.settings.get("engagement_enabled", True):
+            return "interacción con publicaciones desactivada"
+        return None
+
+    def engage_batch(self, leads: int = 4, feed: int = 15, limit: int = 8, force: bool = False) -> Dict:
+        """Recoge publicaciones nuevas (de leads y del feed) y devuelve las pendientes con su prompt."""
+        reason = self._engagement_guard(force, need_hours=False)
+        if reason:
+            return {"ok": True, "skipped": reason, "items": []}
+        collected = 0
+        try:
+            since = _iso(_now() - timedelta(days=10))
+            targets = self.db.select(
+                "sdr_leads",
+                {
+                    "status": _in(("invite_review", "to_invite", "invited", "connected", "messaged")),
+                    "or": f"(last_engaged_at.is.null,last_engaged_at.lt.{since})",
+                },
+                order="score.desc.nullslast",
+                limit=leads,
+            )
+            for lead in targets:
+                fresh = [p for p in li.profile_posts(self.api, lead["urn_id"], count=3)
+                         if (li.age_days(p["post_age"]) or 0) <= 21]
+                if fresh:
+                    rows = self.db.insert(
+                        "sdr_engagements",
+                        {**fresh[0], "lead_id": lead["id"], "source": "lead"},
+                        on_conflict="post_urn", ignore_duplicates=True,
+                    )
+                    collected += len(rows)
+                self.db.update("sdr_leads", {"id": f"eq.{lead['id']}"}, {"last_engaged_at": now_iso()})
+            if feed:
+                me = (self.settings.get("li_profile") or {}).get("name")
+                posts = [p for p in li.feed_posts(self.api, limit=feed) if p["author_name"] != me]
+                if posts:
+                    collected += len(self.db.insert(
+                        "sdr_engagements", [{**p, "source": "feed"} for p in posts],
+                        on_conflict="post_urn", ignore_duplicates=True,
+                    ))
+        except li.SessionError as e:
+            return {**self._session_failed(e), "items": []}
+
+        pending = self.db.select(
+            "sdr_engagements", {"status": "eq.new", "or": _unlocked()}, order="created_at.asc", limit=limit
+        )
+        items = []
+        for post in pending:
+            self.db.update(
+                "sdr_engagements", {"id": f"eq.{post['id']}"},
+                {"locked_until": _iso(_now() + timedelta(minutes=LOCK_MINUTES))},
+            )
+            lead = self.db.one("sdr_leads", {"id": f"eq.{post['lead_id']}"}) if post.get("lead_id") else {}
+            items.append({"engagement_id": post["id"], **prompts.engagement(self.settings, post, lead or {})})
+        if collected:
+            self.log("posts_collected", f"{collected} publicaciones nuevas para revisar")
+        return {"ok": True, "collected": collected, "items": items}
+
+    def save_engagement(self, engagement_id: str, result: Dict) -> Dict:
+        post = self.db.one("sdr_engagements", {"id": f"eq.{engagement_id}"})
+        if not post:
+            raise JobError("Publicación no encontrada")
+        try:
+            score = int(result.get("score") or 0)
+        except (TypeError, ValueError):
+            score = 0
+        relevant = bool(result.get("relevant"))
+        comment = (result.get("comment") or "").strip()[:1200] if relevant else ""
+        values: Dict = {
+            "relevance": score,
+            "reason": (result.get("reason") or "")[:500],
+            "locked_until": None,
+            "want_like": relevant and bool(result.get("like")),
+            "comment": comment,
+            "comment_status": ("approved" if self.settings.get("auto_comment") else "draft") if comment else "none",
+        }
+        values["status"] = "ready" if (values["want_like"] or comment) else "skipped"
+        self.db.update("sdr_engagements", {"id": f"eq.{engagement_id}"}, values)
+        return {"ok": True, "status": values["status"], "comment_status": values["comment_status"]}
+
+    def engage_run(self, force: bool = False, engagement_id: Optional[str] = None) -> Dict:
+        """Da los me gusta pendientes y publica los comentarios aprobados, con límites diarios."""
+        reason = self._engagement_guard(force or bool(engagement_id), need_hours=True)
+        if reason:
+            return {"ok": True, "skipped": reason}
+        if not force and not engagement_id and random.random() < 0.2:
+            return {"ok": True, "skipped": "pausa aleatoria para parecer humano"}
+        s = self.settings
+        likes_left = s.get("daily_like_limit", 25) - self.count_events("post_liked", self.day_start())
+        comments_left = s.get("daily_comment_limit", 8) - self.count_events("post_commented", self.day_start())
+
+        if engagement_id:
+            rows = self.db.select("sdr_engagements", {"id": f"eq.{engagement_id}"})
+        else:
+            # Los comentarios en borrador esperan aprobación: no deben tapar los me gusta pendientes.
+            rows = [
+                r for r in self.db.select("sdr_engagements", {"status": "eq.ready"}, order="created_at.asc", limit=100)
+                if (r["want_like"] and not r.get("liked_at")) or r["comment_status"] == "approved"
+            ][:6]
+        done = {"liked": 0, "commented": 0, "errors": []}
+        for post in rows:
+            values: Dict = {}
+            try:
+                if post["want_like"] and not post.get("liked_at") and likes_left > 0 and done["liked"] < 2:
+                    li.like_post(self.api, post["post_urn"])
+                    values["liked_at"] = now_iso()
+                    likes_left -= 1
+                    done["liked"] += 1
+                    self.log("post_liked", f"{post['author_name']}: {post['post_text'][:120]}", post.get("lead_id"))
+                if post["comment_status"] == "approved" and comments_left > 0 and done["commented"] < 1:
+                    li.comment_post(self.api, post["post_urn"], post["comment"])
+                    values.update({"comment_status": "posted", "commented_at": now_iso()})
+                    comments_left -= 1
+                    done["commented"] += 1
+                    self.log("post_commented", f"{post['author_name']}: {post['comment'][:160]}", post.get("lead_id"))
+            except li.SessionError as e:
+                return self._session_failed(e)
+            except li.LinkedInError as e:
+                values.update({"error": str(e)[:500]})
+                if post["comment_status"] == "approved":
+                    values["comment_status"] = "failed"
+                done["errors"].append(str(e))
+                self.log("engagement_failed", str(e), post.get("lead_id"))
+            merged = {**post, **values}
+            like_pending = merged["want_like"] and not merged.get("liked_at") and "error" not in values
+            comment_pending = merged["comment_status"] in ("draft", "approved")
+            if not like_pending and not comment_pending:
+                values["status"] = "failed" if "error" in values and not merged.get("liked_at") else "done"
+            if values:
+                self.db.update("sdr_engagements", {"id": f"eq.{post['id']}"}, values)
+        return {"ok": True, **done}

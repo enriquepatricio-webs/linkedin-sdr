@@ -35,6 +35,9 @@ lee las respuestas y prepara la contestación. Todo se controla desde un panel.
 | Envío | n8n → `/jobs/send-outbox` | |
 | Respuesta: se para la secuencia, DeepSeek clasifica y propone respuesta | n8n → `/jobs/sync-inbox` → IA → `/jobs/reply-analysis` | `replied` / `interested` / `meeting` / `not_interested` |
 
+| Publicaciones de leads (últimos 21 días) y del feed | n8n → `/jobs/engage-batch` → IA → `/jobs/engagement` | DeepSeek decide relevancia, me gusta y comentario |
+| Me gusta y comentarios aprobados (límites diarios, horario laboral) | n8n → `/jobs/engage-run` | Panel → **Interacción** |
+
 Por defecto todo pasa por **Aprobaciones**. En Ajustes puedes activar el piloto automático (invitaciones y secuencia)
 y las respuestas automáticas por separado. Una respuesta a quien dice que no nunca sale sola.
 
@@ -92,6 +95,8 @@ importarlo en otra instancia.
 | Redactar mensajes (DeepSeek) | cada 30 min L-V |
 | Enviar cola | cada 12 min L-V |
 | Leer bandeja (DeepSeek) | cada 15 min |
+| Recoger publicaciones (DeepSeek) | cada 2 h, 9-19 h L-V |
+| Me gusta y comentarios | cada 20 min, 9-19 h L-V |
 
 ## Seguridad de la cuenta
 

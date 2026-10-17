@@ -5,11 +5,12 @@ import { logout } from "@/app/actions";
 export const dynamic = "force-dynamic";
 
 async function pendingApprovals(): Promise<number> {
-  const [invites, drafts] = await Promise.all([
+  const [invites, drafts, comments] = await Promise.all([
     db().from("sdr_leads").select("id", { count: "exact", head: true }).eq("status", "invite_review"),
     db().from("sdr_messages").select("id", { count: "exact", head: true }).eq("status", "draft"),
+    db().from("sdr_engagements").select("id", { count: "exact", head: true }).eq("comment_status", "draft"),
   ]);
-  return (invites.count ?? 0) + (drafts.count ?? 0);
+  return (invites.count ?? 0) + (drafts.count ?? 0) + (comments.count ?? 0);
 }
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {

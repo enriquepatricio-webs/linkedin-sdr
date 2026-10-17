@@ -69,6 +69,10 @@ export const EVENT: Record<string, string> = {
   no_response: "Sin respuesta",
   session_invalid: "Sesión de LinkedIn inválida",
   manual: "Acción manual",
+  posts_collected: "Publicaciones recogidas",
+  post_liked: "Me gusta",
+  post_commented: "Comentario publicado",
+  engagement_failed: "Interacción fallida",
 };
 
 export const INTENT: Record<string, string> = {

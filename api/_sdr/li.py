@@ -343,3 +343,118 @@ def conversation_events(api: Linkedin, conversation_id: str) -> List[Dict]:
         )
     events.sort(key=lambda x: x["created_ms"])
     return events
+
+
+# ---------- publicaciones: leer, "me gusta" y comentar ----------
+
+_ACTIVITY = re.compile(r"urn:li:activity:(\d+)")
+_AGE = re.compile(r"(\d+)\s*(mo|yr|min|m|h|d|w|y|sem|mes|año|a)\b", re.IGNORECASE)
+_AGE_DAYS = {"min": 0, "m": 0, "h": 0, "d": 1, "w": 7, "sem": 7, "mo": 30, "mes": 30, "yr": 365, "y": 365, "año": 365, "a": 365}
+
+
+def age_days(label: str) -> Optional[int]:
+    """'3d •', '2w', '1mo', '5h' -> días aproximados (None si no se entiende)."""
+    m = _AGE.search(label or "")
+    if not m:
+        return None
+    return int(m.group(1)) * _AGE_DAYS[m.group(2).lower()]
+
+
+def _text(node) -> str:
+    if isinstance(node, dict):
+        if isinstance(node.get("text"), str):
+            return node["text"]
+        return _text(node.get("text"))
+    return node if isinstance(node, str) else ""
+
+
+def profile_posts(api: Linkedin, urn_id: str, count: int = 3) -> List[Dict]:
+    """Publicaciones propias recientes de un perfil (sin compartidos)."""
+    try:
+        raw = api.get_profile_posts(urn_id=urn_id, post_count=count)
+    except ValueError:
+        raise SessionError("Las publicaciones no devolvieron JSON: probablemente la sesión ha caducado")
+    except (KeyError, TypeError):
+        return []
+    posts = []
+    for el in raw or []:
+        if not el or "resharedUpdate" in el:
+            continue
+        urn = (el.get("updateMetadata") or {}).get("urn") or ""
+        m = _ACTIVITY.search(urn) or _ACTIVITY.search(json.dumps(el)[:4000])
+        if not m:
+            continue
+        actor = el.get("actor") or {}
+        age = _text(actor.get("subDescription"))
+        posts.append(
+            {
+                "post_urn": f"urn:li:activity:{m.group(1)}",
+                "post_url": f"https://www.linkedin.com/feed/update/urn:li:activity:{m.group(1)}/",
+                "author_name": _text(actor.get("name")),
+                "author_headline": _text(actor.get("description")),
+                "post_text": _text(el.get("commentary"))[:3000],
+                "post_age": age,
+            }
+        )
+    return posts
+
+
+def feed_posts(api: Linkedin, limit: int = 20) -> List[Dict]:
+    """Publicaciones recientes del feed de Enrique (sin promocionadas)."""
+    try:
+        raw = api.get_feed_posts(limit=limit)
+    except ValueError:
+        raise SessionError("El feed no devolvió JSON: probablemente la sesión ha caducado")
+    except (KeyError, TypeError, IndexError):
+        return []
+    posts = []
+    for p in raw or []:
+        m = _ACTIVITY.search(p.get("url") or "")
+        if not m or not (p.get("content") or "").strip():
+            continue
+        posts.append(
+            {
+                "post_urn": f"urn:li:activity:{m.group(1)}",
+                "post_url": f"https://www.linkedin.com/feed/update/urn:li:activity:{m.group(1)}/",
+                "author_name": p.get("author_name") or "",
+                "author_headline": "",
+                "post_text": p["content"][:3000],
+                "post_age": p.get("old") or "",
+            }
+        )
+    return posts
+
+
+def like_post(api: Linkedin, post_urn: str) -> None:
+    activity_id = post_urn.split(":")[-1]
+    res = api._post(
+        "/voyagerSocialDashReactions",
+        params={"threadUrn": f"urn:li:activity:{activity_id}"},
+        data=json.dumps({"reactionType": "LIKE"}),
+    )
+    if res.status_code in (401, 403):
+        raise SessionError("LinkedIn rechazó la sesión al dar me gusta")
+    if res.status_code not in (200, 201):
+        raise LinkedInError(f"No se pudo dar me gusta ({res.status_code}): {res.text[:200]}")
+
+
+def comment_post(api: Linkedin, post_urn: str, text: str) -> None:
+    """Comenta como lo hace la web de LinkedIn (endpoint interno, no lo trae la librería)."""
+    payload = {
+        "commentary": {
+            "text": text,
+            "attributesV2": [],
+            "$type": "com.linkedin.voyager.dash.common.text.TextViewModel",
+        },
+        "threadUrn": post_urn,
+    }
+    res = api._post(
+        "/voyagerSocialDashNormComments",
+        params={"decorationId": "com.linkedin.voyager.dash.deco.social.NormComment-43"},
+        data=json.dumps(payload),
+        headers={"accept": "application/vnd.linkedin.normalized+json+2.1", "content-type": "application/json"},
+    )
+    if res.status_code in (401, 403):
+        raise SessionError("LinkedIn rechazó la sesión al comentar")
+    if res.status_code not in (200, 201):
+        raise LinkedInError(f"No se pudo comentar ({res.status_code}): {res.text[:200]}")

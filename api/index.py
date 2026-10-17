@@ -88,6 +88,20 @@ class ReplyAnalysis(BaseModel):
     reply: Optional[str] = ""
 
 
+class Engagement(BaseModel):
+    engagement_id: str
+    relevant: Any = False
+    score: Any = 0
+    like: Any = False
+    comment: Optional[str] = ""
+    reason: Optional[str] = ""
+
+
+class EngageRun(BaseModel):
+    force: bool = False
+    engagement_id: Optional[str] = None
+
+
 class SearchPreview(BaseModel):
     search_keywords: str = ""
     search_title: str = ""
@@ -200,3 +214,21 @@ def sync_inbox(body: Run = Run()):
 @app.post("/api/py/jobs/reply-analysis", dependencies=[Depends(auth)])
 def reply_analysis(body: ReplyAnalysis):
     return SDR().save_reply_analysis(body.lead_id, body.model_dump())
+
+
+@app.post("/api/py/jobs/engage-batch", dependencies=[Depends(auth)])
+def engage_batch(body: Run = Run()):
+    return SDR().engage_batch(limit=min(body.limit, 10), force=body.force)
+
+
+@app.post("/api/py/jobs/engagement", dependencies=[Depends(auth)])
+def engagement(body: Engagement):
+    data = body.model_dump()
+    data["relevant"] = _truthy(body.relevant)
+    data["like"] = _truthy(body.like)
+    return SDR().save_engagement(body.engagement_id, data)
+
+
+@app.post("/api/py/jobs/engage-run", dependencies=[Depends(auth)])
+def engage_run(body: EngageRun = EngageRun()):
+    return SDR().engage_run(force=body.force, engagement_id=body.engagement_id)

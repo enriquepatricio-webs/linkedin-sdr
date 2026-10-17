@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { approveInvite, approveMessage, inviteNow, rejectInvite, rejectMessage, sendMessageNow } from "@/app/actions";
+import { approveComment, approveInvite, approveMessage, commentNow, inviteNow, rejectComment, rejectInvite, rejectMessage, sendMessageNow } from "@/app/actions";
 import { Feedback, Submit } from "./forms";
 import { btnDanger, btnPrimary, btnSuccess, input } from "./ui";
 
@@ -40,6 +40,26 @@ export function DraftEditor({ id, body, approveLabel = "Aprobar" }: { id: string
         </button>
         <button formAction={rejectMessage} className={btnDanger}>
           Rechazar
+        </button>
+      </div>
+      <Feedback state={state} />
+    </form>
+  );
+}
+
+export function CommentEditor({ id, comment }: { id: string; comment: string }) {
+  const [state, nowAction] = useActionState(commentNow, null);
+  return (
+    <form action={approveComment} className="space-y-2">
+      <input type="hidden" name="id" value={id} />
+      <textarea name="comment" defaultValue={comment} rows={Math.min(6, Math.max(2, Math.ceil(comment.length / 80)))} className={input} />
+      <div className="flex flex-wrap gap-2">
+        <Submit className={btnSuccess}>Aprobar</Submit>
+        <button formAction={nowAction} className={btnPrimary}>
+          Comentar ya
+        </button>
+        <button formAction={rejectComment} className={btnDanger}>
+          Descartar
         </button>
       </div>
       <Feedback state={state} />

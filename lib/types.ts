@@ -45,6 +45,11 @@ export type Settings = {
   li_session_status: "ok" | "invalid" | "unknown";
   li_session_checked_at: string | null;
   li_profile: { name?: string; public_id?: string; urn_id?: string; headline?: string } | null;
+  engagement_enabled: boolean;
+  auto_comment: boolean;
+  daily_like_limit: number;
+  daily_comment_limit: number;
+  engagement_topics: string;
   updated_at: string;
 };
 
@@ -121,5 +126,27 @@ export type SdrEvent = {
   lead_id: string | null;
   campaign_id: string | null;
   detail: string;
+  created_at: string;
+};
+
+export type Engagement = {
+  id: string;
+  lead_id: string | null;
+  source: "lead" | "feed";
+  post_urn: string;
+  post_url: string;
+  author_name: string;
+  author_headline: string;
+  post_text: string;
+  post_age: string;
+  status: "new" | "ready" | "done" | "skipped" | "failed";
+  relevance: number | null;
+  reason: string;
+  want_like: boolean;
+  liked_at: string | null;
+  comment: string;
+  comment_status: "none" | "draft" | "approved" | "posted" | "rejected" | "failed";
+  commented_at: string | null;
+  error: string | null;
   created_at: string;
 };

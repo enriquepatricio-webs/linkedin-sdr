@@ -56,12 +56,14 @@ DEFAULTS = {
                       last_checked_at=None, inbox_synced_at=None, campaign_id=None, public_id=None, company="",
                       connection_note="", ai_summary="", invited_at=None, conversation_urn_id=None),
     "sdr_messages": dict(linkedin_event_urn=None, status="draft", ai_generated=False, sent_at=None),
+    "sdr_engagements": dict(status="new", lead_id=None, want_like=False, liked_at=None, comment="",
+                            comment_status="none", locked_until=None, author_headline="", post_age=""),
 }
 
 
 class FakeDB:
     def __init__(self):
-        self.t = {k: [] for k in ("sdr_settings", "sdr_campaigns", "sdr_leads", "sdr_messages", "sdr_events")}
+        self.t = {k: [] for k in ("sdr_settings", "sdr_campaigns", "sdr_leads", "sdr_messages", "sdr_events", "sdr_engagements")}
 
     def select(self, table, filters=None, order=None, limit=None, columns="*"):
         rows = [dict(r) for r in self.t[table] if _match(r, filters or {})]
@@ -104,6 +106,7 @@ ME = "ACoAAME"
 class FakeLinkedIn:
     def __init__(self):
         self.invites, self.sent = [], []
+        self.likes, self.comments = [], []
         self.accepted = set()
         self.inbox = {}
 
@@ -122,6 +125,18 @@ class FakeLinkedIn:
             {"id": f"2-{urn}", "last_activity_ms": max(e["created_ms"] for e in evs), "participants": [ME, urn]}
             for urn, evs in self.inbox.items()])
         monkeypatch.setattr(li, "conversation_events", lambda api, cid: self.inbox[cid[2:]])
+        monkeypatch.setattr(li, "profile_posts", lambda api, urn, count=3: [
+            {"post_urn": f"urn:li:activity:{urn}1", "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
+             "post_text": "Hemos abierto nueva sede", "post_age": "2d •"},
+            {"post_urn": f"urn:li:activity:{urn}2", "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
+             "post_text": "Post antiguo", "post_age": "3mo •"}])
+        monkeypatch.setattr(li, "feed_posts", lambda api, limit=20: [
+            {"post_urn": "urn:li:activity:900", "post_url": "u", "author_name": "Otra", "author_headline": "",
+             "post_text": "Cómo captar clientes", "post_age": "5h"},
+            {"post_urn": "urn:li:activity:901", "post_url": "u", "author_name": "Enrique", "author_headline": "",
+             "post_text": "Mi propio post", "post_age": "1d"}])
+        monkeypatch.setattr(li, "like_post", lambda api, urn: self.likes.append(urn))
+        monkeypatch.setattr(li, "comment_post", lambda api, urn, text: self.comments.append((urn, text)))
 
 
 @pytest.fixture
@@ -319,3 +334,56 @@ def test_search_total():
             return Res()
 
     assert li.search_total(Api(), {"search_keywords": "catering, eventos", "search_regions": ["105646813"]}) == 1234
+
+
+def test_engagement_flow(env):
+    db, fake = env
+    sdr(db).prospect()
+    db.t["sdr_leads"][0].update(status="invited", score=90)
+    db.t["sdr_settings"][0].update(li_profile={"urn_id": ME, "name": "Enrique"}, engagement_enabled=True,
+                                   auto_comment=False, daily_like_limit=25, daily_comment_limit=8)
+
+    batch = sdr(db).engage_batch(leads=4, feed=10, limit=10)
+    urns = {r["post_urn"] for r in db.t["sdr_engagements"]}
+    assert urns == {"urn:li:activity:ACoAA01", "urn:li:activity:900"}  # sin posts viejos ni propios
+    assert len(batch["items"]) == 2 and "{" not in batch["items"][0]["system_prompt"]
+    assert sdr(db).engage_batch(leads=4, feed=0)["items"] == []  # bloqueados mientras la IA decide
+
+    lead_post = next(r for r in db.t["sdr_engagements"] if r["source"] == "lead")
+    feed_post = next(r for r in db.t["sdr_engagements"] if r["source"] == "feed")
+    assert sdr(db).save_engagement(lead_post["id"], {"relevant": True, "score": 80, "like": True,
+                                                     "comment": "Enhorabuena por la nueva sede"})["comment_status"] == "draft"
+    assert sdr(db).save_engagement(feed_post["id"], {"relevant": False, "like": True})["status"] == "skipped"
+
+    r = sdr(db).engage_run()
+    assert r["liked"] == 1 and r["commented"] == 0  # el comentario espera aprobación
+    assert fake.likes == ["urn:li:activity:ACoAA01"]
+    assert db.one("sdr_engagements", {"id": f"eq.{lead_post['id']}"})["status"] == "ready"
+
+    db.update("sdr_engagements", {"id": f"eq.{lead_post['id']}"}, {"comment_status": "approved"})
+    r = sdr(db).engage_run()
+    assert r["commented"] == 1 and fake.comments == [("urn:li:activity:ACoAA01", "Enhorabuena por la nueva sede")]
+    row = db.one("sdr_engagements", {"id": f"eq.{lead_post['id']}"})
+    assert row["status"] == "done" and row["comment_status"] == "posted"
+    assert fake.likes == ["urn:li:activity:ACoAA01"]  # no repite el me gusta
+
+    db.update("sdr_settings", {"id": "eq.1"}, {"engagement_enabled": False})
+    assert sdr(db).engage_run()["skipped"] == "interacción con publicaciones desactivada"
+
+
+def test_age_and_profile_posts():
+    assert li.age_days("3d •") == 3 and li.age_days("2w • Edited") == 14 and li.age_days("1mo") == 30
+    assert li.age_days("5h") == 0 and li.age_days("") is None
+
+    class Api:
+        def get_profile_posts(self, urn_id, post_count):
+            return [
+                {"updateMetadata": {"urn": "urn:li:activity:111"}, "actor": {"name": {"text": "Ana"},
+                 "description": {"text": "CEO"}, "subDescription": {"text": "2d •"}},
+                 "commentary": {"text": {"text": "Abrimos sede"}}},
+                {"updateMetadata": {"urn": "urn:li:activity:222"}, "resharedUpdate": {}},
+            ]
+
+    posts = li.profile_posts(Api(), "X")
+    assert posts == [{"post_urn": "urn:li:activity:111", "post_url": "https://www.linkedin.com/feed/update/urn:li:activity:111/",
+                      "author_name": "Ana", "author_headline": "CEO", "post_text": "Abrimos sede", "post_age": "2d •"}]
