@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import Depends, FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
@@ -21,10 +21,15 @@ from _sdr.li import LinkedInError  # noqa: E402
 app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
 
-def auth(x_api_key: Optional[str] = Header(default=None), authorization: Optional[str] = Header(default=None)):
+def auth(
+    x_api_key: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    key_param: Optional[str] = Query(default=None, alias="x-api-key"),
+):
     # Los mensajes distinguen el fallo sin revelar la clave (sólo longitudes, para detectar espacios).
     expected = os.environ.get("SDR_API_KEY", "").strip()
-    given = (x_api_key or (authorization or "").removeprefix("Bearer ")).strip()
+    # Cabecera x-api-key, Authorization: Bearer o ?x-api-key= (credencial Query Auth de n8n).
+    given = (x_api_key or key_param or (authorization or "").removeprefix("Bearer ")).strip()
     if not expected:
         raise HTTPException(status_code=500, detail="SDR_API_KEY no está configurada en este despliegue de Vercel")
     if not given:

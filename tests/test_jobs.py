@@ -293,3 +293,14 @@ def test_api_accepts_llm_nulls(monkeypatch):
     assert r.status_code == 200 and calls["q"]["qualified"] is True
     r = client.post("/api/py/jobs/reply-analysis", headers=h, json={"lead_id": "x", "intent": "meeting", "reply": None})
     assert r.status_code == 200
+
+
+def test_api_key_in_query(monkeypatch):
+    monkeypatch.setenv("SDR_API_KEY", "secreto")
+    from fastapi.testclient import TestClient
+    import index
+
+    monkeypatch.setattr(index, "SDR", lambda: type("S", (), {"invite": lambda self, **k: {"ok": True}})())
+    client = TestClient(index.app)
+    assert client.post("/api/py/jobs/invite?x-api-key=secreto").json() == {"ok": True}
+    assert client.post("/api/py/jobs/invite?x-api-key=otro").status_code == 401

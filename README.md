@@ -79,7 +79,7 @@ Tras añadir las variables, vuelve a desplegar (Deployments → Redeploy) y entr
 ### 4. n8n
 
 El workflow ya está creado en https://n8n.thecotocompany.com/workflow/bHhfhvrgePh3kppl (zona horaria Europe/Madrid).
-Usa las credenciales existentes `SDR API (x-api-key)` (Header Auth: nombre `x-api-key`, valor = `SDR_API_KEY`) y
+Usa las credenciales existentes `SDR API (x-api-key)` (Query Auth: nombre `x-api-key`, valor = `SDR_API_KEY`) y
 `OpenRouter account`, con el modelo `deepseek/deepseek-chat`. `n8n/linkedin-sdr.workflow.json` es una copia para
 importarlo en otra instancia.
 
