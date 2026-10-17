@@ -1,0 +1,959 @@
+{
+  "name": "LinkedIn SDR · The Coto Company",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## LinkedIn SDR · The Coto Company\nCada fila es un paso del SDR. Toda la lógica (límites, horario, estados) vive en la API de Vercel; n8n marca el ritmo y DeepSeek (OpenRouter) escribe.\n\n**Credenciales**\n- *SDR API* (Custom Auth): `{\"headers\": {\"x-api-key\": \"TU_SDR_API_KEY\"}}`\n- *OpenRouter account*: la que ya tienes.\n\nSi el motor está apagado en el panel, todo responde *skipped* y no pasa nada.",
+        "height": 320,
+        "width": 560,
+        "color": 4
+      },
+      "name": "Nota 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "id": "7784749d-9542-435a-8636-d581532ad3eb"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "20 8,13 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Cada mañana y mediodía",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Busca leads nuevos",
+      "notesInFlow": true,
+      "id": "9e4a27fd-82de-4852-b332-bfceb0e89708"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/prospect",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Buscar leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "ffe695db-8b16-48c1-a4f0-9af0df331922"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/30 7-21 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cada 30 min (cualificar)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        260
+      ],
+      "notes": "Cualifica y escribe la nota",
+      "notesInFlow": true,
+      "id": "6849555e-fa58-4e13-8635-ecac85aaa4cf"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/qualify-batch",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"limit\": 5}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Leads por cualificar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        260
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "26794b49-3ccf-4150-b208-160e21e8f8d1"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "name": "Un lead por item",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        500,
+        260
+      ],
+      "id": "9fd60557-74a8-4e5a-8bb8-ee41e6fa17d3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_prompt }}",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.system_prompt }}"
+            }
+          ]
+        }
+      },
+      "name": "DeepSeek · cualificar",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        740,
+        260
+      ],
+      "onError": "continueRegularOutput",
+      "id": "52ea3689-37a1-42c5-8ac6-1037f40e4955"
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-chat",
+        "options": {
+          "temperature": 0.5,
+          "responseFormat": "json_object",
+          "maxTokens": 800
+        }
+      },
+      "name": "OpenRouter · cualificar",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        740,
+        460
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "",
+          "name": "OpenRouter account"
+        }
+      },
+      "id": "0eec4041-53b5-4970-b207-01b69425e12f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Un lead por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['score'] === undefined || data['score'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id } });\n});\nreturn out;\n"
+      },
+      "name": "Parsear cualificación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        260
+      ],
+      "id": "f50ee3b8-62ee-4a1c-b690-582e3474294c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/qualification",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Guardar cualificación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        260
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "3a3ebf74-5270-457e-910f-51ea53ec36dc"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 8-19 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Cada 15 min (invitar)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        720
+      ],
+      "notes": "1 invitación por ronda, respeta límites",
+      "notesInFlow": true,
+      "id": "27eb7097-0483-4e93-8ded-be5bc3c9327c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/invite",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Enviar invitación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        720
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "d6199e5d-1459-4c04-a848-89e1ac8e7a4b"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5 8-20/2 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cada 2 h (aceptaciones)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        940
+      ],
+      "notes": "Detecta invitaciones aceptadas",
+      "notesInFlow": true,
+      "id": "85458c9c-4095-4f65-9a09-ae78fae5e358"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/check-connections",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"limit\": 15}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Comprobar aceptaciones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        940
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "488cb573-d5d4-47b1-af76-3fb848707a64"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10,40 8-19 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Cada 30 min (redactar)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1200
+      ],
+      "notes": "Primer mensaje y seguimientos",
+      "notesInFlow": true,
+      "id": "08ce1fb8-ec5a-4348-b1a8-2a7a2d09af2b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/due-messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"limit\": 5}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Mensajes pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        1200
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "844341db-c780-4acf-8df0-cde3a23f66e9"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "name": "Un mensaje por item",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        500,
+        1200
+      ],
+      "id": "e3bfff94-3c31-46a1-bc28-367c35a4edcf"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_prompt }}",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.system_prompt }}"
+            }
+          ]
+        }
+      },
+      "name": "DeepSeek · redactar",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        740,
+        1200
+      ],
+      "onError": "continueRegularOutput",
+      "id": "11d91ef5-4e3c-41c3-a641-670e3d273da0"
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-chat",
+        "options": {
+          "temperature": 0.5,
+          "responseFormat": "json_object",
+          "maxTokens": 800
+        }
+      },
+      "name": "OpenRouter · redactar",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        740,
+        1400
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "",
+          "name": "OpenRouter account"
+        }
+      },
+      "id": "29a0ee2e-afe6-461b-aa80-15b5705ef5f5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Un mensaje por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['message'] === undefined || data['message'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, kind: src.kind } });\n});\nreturn out;\n"
+      },
+      "name": "Parsear mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        1200
+      ],
+      "id": "20d9a3ae-0acf-43a4-b4f9-c67ebc6ff569"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/draft",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Guardar borrador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        1200
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "90f18d57-84cf-48c7-9a45-5e7b562ab9f7"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/12 8-19 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Cada 12 min (enviar)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1660
+      ],
+      "notes": "Envía mensajes aprobados",
+      "notesInFlow": true,
+      "id": "f67920da-781c-40e1-804d-692c34b3b143"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/send-outbox",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Enviar cola",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        1660
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "a125cbb8-94cf-4d77-a14e-c64b9ee83864"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 7-22 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cada 15 min (bandeja)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1920
+      ],
+      "notes": "Lee respuestas y prepara contestación",
+      "notesInFlow": true,
+      "id": "1ba7e8c3-5efa-4e72-9e2b-05b98c6d6eb3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/sync-inbox",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Leer bandeja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        1920
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "a3508879-fe91-48c1-9200-f79b01be93bf"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "name": "Una respuesta por item",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        500,
+        1920
+      ],
+      "id": "ec75ace6-4012-4040-bf05-f299982b3429"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_prompt }}",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.system_prompt }}"
+            }
+          ]
+        }
+      },
+      "name": "DeepSeek · responder",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        740,
+        1920
+      ],
+      "onError": "continueRegularOutput",
+      "id": "575ac7c1-0689-4c45-a3fc-eee3cb12e891"
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-chat",
+        "options": {
+          "temperature": 0.5,
+          "responseFormat": "json_object",
+          "maxTokens": 800
+        }
+      },
+      "name": "OpenRouter · responder",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        740,
+        2120
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "",
+          "name": "OpenRouter account"
+        }
+      },
+      "id": "4f97d284-1e8f-4f26-9e4a-423b81aad577"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Una respuesta por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['intent'] === undefined || data['intent'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, message_id: src.message_id } });\n});\nreturn out;\n"
+      },
+      "name": "Parsear respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        1920
+      ],
+      "id": "f05f8044-a052-4ce5-85b5-499c7ab33175"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/reply-analysis",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Guardar análisis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        1920
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "",
+          "name": "SDR API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "id": "a8195981-9bcf-4eb8-b4c8-2041ebffad89"
+    }
+  ],
+  "connections": {
+    "Cada mañana y mediodía": {
+      "main": [
+        [
+          {
+            "node": "Buscar leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter · cualificar": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "DeepSeek · cualificar",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 30 min (cualificar)": {
+      "main": [
+        [
+          {
+            "node": "Leads por cualificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads por cualificar": {
+      "main": [
+        [
+          {
+            "node": "Un lead por item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un lead por item": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek · cualificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · cualificar": {
+      "main": [
+        [
+          {
+            "node": "Parsear cualificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear cualificación": {
+      "main": [
+        [
+          {
+            "node": "Guardar cualificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 15 min (invitar)": {
+      "main": [
+        [
+          {
+            "node": "Enviar invitación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 2 h (aceptaciones)": {
+      "main": [
+        [
+          {
+            "node": "Comprobar aceptaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter · redactar": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "DeepSeek · redactar",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 30 min (redactar)": {
+      "main": [
+        [
+          {
+            "node": "Mensajes pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes pendientes": {
+      "main": [
+        [
+          {
+            "node": "Un mensaje por item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un mensaje por item": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek · redactar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · redactar": {
+      "main": [
+        [
+          {
+            "node": "Parsear mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear mensaje": {
+      "main": [
+        [
+          {
+            "node": "Guardar borrador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 12 min (enviar)": {
+      "main": [
+        [
+          {
+            "node": "Enviar cola",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter · responder": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "DeepSeek · responder",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 15 min (bandeja)": {
+      "main": [
+        [
+          {
+            "node": "Leer bandeja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer bandeja": {
+      "main": [
+        [
+          {
+            "node": "Una respuesta por item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una respuesta por item": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek · responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · responder": {
+      "main": [
+        [
+          {
+            "node": "Parsear respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear respuesta": {
+      "main": [
+        [
+          {
+            "node": "Guardar análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "tags": []
+}

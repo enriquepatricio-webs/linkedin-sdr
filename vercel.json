@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "rewrites": [{ "source": "/api/py/:path*", "destination": "/api/index" }],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{.next,.git,node_modules,app,components,lib,public,n8n,supabase,tests}/**"
+    }
+  }
+}
