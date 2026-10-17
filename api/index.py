@@ -117,6 +117,7 @@ def status():
     }
 
 
+@app.get("/api/py/linkedin/check", dependencies=[Depends(auth)])
 @app.post("/api/py/linkedin/check", dependencies=[Depends(auth)])
 def linkedin_check():
     return SDR().check_session()
