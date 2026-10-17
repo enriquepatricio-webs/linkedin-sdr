@@ -15,7 +15,7 @@
         -420,
         -260
       ],
-      "id": "7784749d-9542-435a-8636-d581532ad3eb"
+      "id": "ec928110-98a5-4098-9da5-afaaabdcc98d"
     },
     {
       "parameters": {
@@ -37,12 +37,12 @@
       ],
       "notes": "Busca leads nuevos",
       "notesInFlow": true,
-      "id": "9e4a27fd-82de-4852-b332-bfceb0e89708"
+      "id": "303ab926-d4b0-4a78-b7dc-77817403f938"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/prospect",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/prospect",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -68,7 +68,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "ffe695db-8b16-48c1-a4f0-9af0df331922"
+      "id": "e34f8a8f-784c-4557-aa9a-e5a71a1f1c31"
     },
     {
       "parameters": {
@@ -90,12 +90,12 @@
       ],
       "notes": "Cualifica y escribe la nota",
       "notesInFlow": true,
-      "id": "6849555e-fa58-4e13-8635-ecac85aaa4cf"
+      "id": "25b6a1e7-ff9d-4211-a5fd-207eebf6ab54"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/qualify-batch",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/qualify-batch",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -121,7 +121,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "26794b49-3ccf-4150-b208-160e21e8f8d1"
+      "id": "7c9d5ec7-c5c2-4a21-a4a9-c49ce2dbed44"
     },
     {
       "parameters": {
@@ -135,7 +135,7 @@
         500,
         260
       ],
-      "id": "9fd60557-74a8-4e5a-8bb8-ee41e6fa17d3"
+      "id": "b3c721ad-504d-4dac-8ffc-df342f22051e"
     },
     {
       "parameters": {
@@ -158,7 +158,7 @@
         260
       ],
       "onError": "continueRegularOutput",
-      "id": "52ea3689-37a1-42c5-8ac6-1037f40e4955"
+      "id": "f3d64d00-fabf-4bb6-a575-df37b7c0f36d"
     },
     {
       "parameters": {
@@ -182,7 +182,7 @@
           "name": "OpenRouter account"
         }
       },
-      "id": "0eec4041-53b5-4970-b207-01b69425e12f"
+      "id": "d692e515-6032-468d-8df7-6d7a1b68b4dd"
     },
     {
       "parameters": {
@@ -195,12 +195,12 @@
         1060,
         260
       ],
-      "id": "f50ee3b8-62ee-4a1c-b690-582e3474294c"
+      "id": "8d8aa0eb-32ce-41a9-9c58-dc4789c70355"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/qualification",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/qualification",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -226,7 +226,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "3a3ebf74-5270-457e-910f-51ea53ec36dc"
+      "id": "3ee55b87-86a2-4626-a73f-11e958393f66"
     },
     {
       "parameters": {
@@ -248,12 +248,12 @@
       ],
       "notes": "1 invitación por ronda, respeta límites",
       "notesInFlow": true,
-      "id": "27eb7097-0483-4e93-8ded-be5bc3c9327c"
+      "id": "a2bedee5-1d16-462f-9744-31022cf4ebbc"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/invite",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/invite",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -279,7 +279,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "d6199e5d-1459-4c04-a848-89e1ac8e7a4b"
+      "id": "0a541dae-f241-4004-8669-fb25776fa93b"
     },
     {
       "parameters": {
@@ -301,12 +301,12 @@
       ],
       "notes": "Detecta invitaciones aceptadas",
       "notesInFlow": true,
-      "id": "85458c9c-4095-4f65-9a09-ae78fae5e358"
+      "id": "fbc3664f-a96d-4f9f-b7d9-30d0e8a20257"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/check-connections",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/check-connections",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -332,7 +332,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "488cb573-d5d4-47b1-af76-3fb848707a64"
+      "id": "fc85a676-9dca-440d-9971-77c8a67ea94b"
     },
     {
       "parameters": {
@@ -354,12 +354,12 @@
       ],
       "notes": "Primer mensaje y seguimientos",
       "notesInFlow": true,
-      "id": "08ce1fb8-ec5a-4348-b1a8-2a7a2d09af2b"
+      "id": "acf892f4-129a-4c8d-a11b-e9a5c4c0592b"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/due-messages",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/due-messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -385,7 +385,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "844341db-c780-4acf-8df0-cde3a23f66e9"
+      "id": "aa4ff99e-3411-4fd2-be92-3a7228440a75"
     },
     {
       "parameters": {
@@ -399,7 +399,7 @@
         500,
         1200
       ],
-      "id": "e3bfff94-3c31-46a1-bc28-367c35a4edcf"
+      "id": "52758356-f598-41c8-8fb7-10ac13d77279"
     },
     {
       "parameters": {
@@ -422,7 +422,7 @@
         1200
       ],
       "onError": "continueRegularOutput",
-      "id": "11d91ef5-4e3c-41c3-a641-670e3d273da0"
+      "id": "2a7738c0-6e29-4e8c-bcdb-e8b70362f403"
     },
     {
       "parameters": {
@@ -446,7 +446,7 @@
           "name": "OpenRouter account"
         }
       },
-      "id": "29a0ee2e-afe6-461b-aa80-15b5705ef5f5"
+      "id": "1e5743bb-3999-4d8d-a9a2-180ee86896d2"
     },
     {
       "parameters": {
@@ -459,12 +459,12 @@
         1060,
         1200
       ],
-      "id": "20d9a3ae-0acf-43a4-b4f9-c67ebc6ff569"
+      "id": "e745e1cc-e76e-42db-8248-90e5e547250c"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/draft",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/draft",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -490,7 +490,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "90f18d57-84cf-48c7-9a45-5e7b562ab9f7"
+      "id": "7afd482f-f38a-473f-9114-0ee0a264b1dc"
     },
     {
       "parameters": {
@@ -512,12 +512,12 @@
       ],
       "notes": "Envía mensajes aprobados",
       "notesInFlow": true,
-      "id": "f67920da-781c-40e1-804d-692c34b3b143"
+      "id": "0b5f3207-2761-4ebf-a7f7-f8587556daa0"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/send-outbox",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/send-outbox",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -543,7 +543,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "a125cbb8-94cf-4d77-a14e-c64b9ee83864"
+      "id": "87d607e7-eb7f-42b0-8772-5a2d52ab9c72"
     },
     {
       "parameters": {
@@ -565,12 +565,12 @@
       ],
       "notes": "Lee respuestas y prepara contestación",
       "notesInFlow": true,
-      "id": "1ba7e8c3-5efa-4e72-9e2b-05b98c6d6eb3"
+      "id": "d5e8b4c1-50c9-4264-abd0-7d6e954c6654"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/sync-inbox",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/sync-inbox",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -596,7 +596,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "a3508879-fe91-48c1-9200-f79b01be93bf"
+      "id": "bc8196e0-3eef-4104-a081-790cfb4f3a6c"
     },
     {
       "parameters": {
@@ -610,7 +610,7 @@
         500,
         1920
       ],
-      "id": "ec75ace6-4012-4040-bf05-f299982b3429"
+      "id": "a9841a01-e429-4533-9ed0-f5489677c2fc"
     },
     {
       "parameters": {
@@ -633,7 +633,7 @@
         1920
       ],
       "onError": "continueRegularOutput",
-      "id": "575ac7c1-0689-4c45-a3fc-eee3cb12e891"
+      "id": "7d2a6dc5-756f-442c-a4ee-8a716e0fcafb"
     },
     {
       "parameters": {
@@ -657,7 +657,7 @@
           "name": "OpenRouter account"
         }
       },
-      "id": "4f97d284-1e8f-4f26-9e4a-423b81aad577"
+      "id": "62f11e4f-a39a-41d8-aad1-5e5093c59d84"
     },
     {
       "parameters": {
@@ -670,12 +670,12 @@
         1060,
         1920
       ],
-      "id": "f05f8044-a052-4ce5-85b5-499c7ab33175"
+      "id": "af4a99f4-dcd9-46e5-94f3-49007d975a1a"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://TU-PROYECTO.vercel.app/api/py/jobs/reply-analysis",
+        "url": "https://linkedin-sdr.vercel.app/api/py/jobs/reply-analysis",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendBody": true,
@@ -701,7 +701,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000,
-      "id": "a8195981-9bcf-4eb8-b4c8-2041ebffad89"
+      "id": "f177895f-d4a0-41a6-ab3f-542ce90951a2"
     }
   ],
   "connections": {

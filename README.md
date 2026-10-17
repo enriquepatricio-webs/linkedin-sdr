@@ -62,7 +62,8 @@ bloquea a n8n. Opciones: en **Settings → Deployment Protection** cámbiala a *
 tiene contraseña y la API su clave), o crea un *Protection Bypass for Automation* y añade la cabecera
 `x-vercel-protection-bypass` en la credencial de n8n (el panel la usa sola si existe).
 
-Despliega a producción (rama de producción del proyecto) y entra en la URL con `PANEL_PASSWORD`.
+Tras añadir las variables, vuelve a desplegar (Deployments → Redeploy) y entra en https://linkedin-sdr.vercel.app con
+`PANEL_PASSWORD`.
 
 ### 3. Panel
 
@@ -77,8 +78,8 @@ Despliega a producción (rama de producción del proyecto) y entra en la URL con
 ### 4. n8n
 
 1. Importa `n8n/linkedin-sdr.workflow.json`.
-2. Sustituye `https://TU-PROYECTO.vercel.app` por la URL de producción en los nodos HTTP (buscar y reemplazar en el
-   JSON antes de importarlo es lo más rápido).
+2. Los nodos HTTP ya apuntan a `https://linkedin-sdr.vercel.app` (producción). Si usas otro dominio, busca y
+   reemplaza en el JSON antes de importarlo.
 3. Crea la credencial **Custom Auth** llamada `SDR API`:
    ```json
    { "headers": { "x-api-key": "TU_SDR_API_KEY" } }
