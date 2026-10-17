@@ -190,6 +190,22 @@ class SDR:
             summary.append({"campaign": c["name"], "found": len(people), "new": len(inserted)})
         return {"ok": True, "campaigns": summary}
 
+    def research(self, segment: Dict, sample: int = 5) -> Dict:
+        """Estudio de mercado: tamaño del segmento en LinkedIn y una muestra de perfiles."""
+        try:
+            total = li.search_total(self.api, segment)
+            people = li.search_people(self.api, segment, limit=sample, offset=0) if sample else []
+        except li.SessionError as e:
+            return self._session_failed(e)
+        return {"ok": True, "total": total, "people": people}
+
+    def research_profile(self, public_id: str) -> Dict:
+        try:
+            profile = li.get_profile(self.api, public_id, public_id)
+        except li.SessionError as e:
+            return self._session_failed(e)
+        return {"ok": bool(profile), "profile": profile}
+
     def search_preview(self, campaign: Dict, limit: int = 10) -> Dict:
         try:
             return {"ok": True, "people": li.search_people(self.api, campaign, limit=limit, offset=0)}

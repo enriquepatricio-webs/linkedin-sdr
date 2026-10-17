@@ -304,3 +304,18 @@ def test_api_key_in_query(monkeypatch):
     client = TestClient(index.app)
     assert client.post("/api/py/jobs/invite?x-api-key=secreto").json() == {"ok": True}
     assert client.post("/api/py/jobs/invite?x-api-key=otro").status_code == 401
+
+
+def test_search_total():
+    class Res:
+        status_code, url = 200, "https://www.linkedin.com/voyager/api/graphql"
+
+        def json(self):
+            return {"data": {"searchDashClustersByAll": {"metadata": {"totalResultCount": 1234}}}}
+
+    class Api:
+        def _fetch(self, uri):
+            assert "key:geoUrn,value:List(105646813)" in uri and "keywords:catering eventos," in uri
+            return Res()
+
+    assert li.search_total(Api(), {"search_keywords": "catering, eventos", "search_regions": ["105646813"]}) == 1234

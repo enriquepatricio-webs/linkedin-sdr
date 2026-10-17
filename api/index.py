@@ -127,6 +127,27 @@ def search_preview(body: SearchPreview):
     return SDR().search_preview(body.model_dump())
 
 
+def _csv(value: str) -> List[str]:
+    return [x.strip() for x in (value or "").split(",") if x.strip()]
+
+
+@app.get("/api/py/research/search", dependencies=[Depends(auth)])
+def research_search(
+    keywords: str = "", title: str = "", company: str = "", regions: str = "", industries: str = "",
+    depths: str = "S,O", sample: int = 5,
+):
+    segment = {
+        "search_keywords": keywords, "search_title": title, "search_company": company,
+        "search_regions": _csv(regions), "search_industries": _csv(industries), "network_depths": _csv(depths),
+    }
+    return SDR().research(segment, sample=max(0, min(sample, 25)))
+
+
+@app.get("/api/py/research/profile", dependencies=[Depends(auth)])
+def research_profile(public_id: str):
+    return SDR().research_profile(public_id)
+
+
 @app.post("/api/py/jobs/prospect", dependencies=[Depends(auth)])
 def prospect(body: Run = Run()):
     return SDR().prospect(force=body.force, campaign_id=body.campaign_id)

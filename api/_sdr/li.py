@@ -88,7 +88,7 @@ def _public_id(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def search_people(api: Linkedin, campaign: Dict, limit: int, offset: int = 0) -> List[Dict]:
+def _search_params(campaign: Dict) -> Dict:
     filters = ["(key:resultType,value:List(PEOPLE))"]
     depths = [d for d in campaign.get("network_depths") or [] if d in ("F", "S", "O")]
     if depths:
@@ -105,6 +105,29 @@ def search_people(api: Linkedin, campaign: Dict, limit: int, offset: int = 0) ->
     params = {"filters": f"List({','.join(filters)})"}
     if _clean(campaign.get("search_keywords")):
         params["keywords"] = _clean(campaign["search_keywords"])
+    return params
+
+
+def search_total(api: Linkedin, campaign: Dict) -> Optional[int]:
+    """Número de resultados que LinkedIn dice tener para estos filtros (una sola petición)."""
+    params = _search_params(campaign)
+    keywords = f"keywords:{params['keywords']}," if params.get("keywords") else ""
+    res = api._fetch(
+        f"/graphql?variables=(start:0,origin:GLOBAL_SEARCH_HEADER,"
+        f"query:({keywords}flagshipSearchIntent:SEARCH_SRP,"
+        f"queryParameters:{params['filters']},includeFiltersInResponse:false))"
+        f"&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0"
+    )
+    data = _json(res, "búsqueda")
+    clusters = (data.get("data") or {}).get("searchDashClustersByAll") or {}
+    total = (clusters.get("metadata") or {}).get("totalResultCount")
+    if total is None:
+        total = (clusters.get("paging") or {}).get("total")
+    return total
+
+
+def search_people(api: Linkedin, campaign: Dict, limit: int, offset: int = 0) -> List[Dict]:
+    params = _search_params(campaign)
 
     try:
         raw = api.search(params, limit=limit, offset=offset)

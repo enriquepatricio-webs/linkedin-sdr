@@ -1,6 +1,14 @@
 {
   "framework": "nextjs",
-  "rewrites": [{ "source": "/api/py/:path*", "destination": "/api/index" }],
+  "regions": [
+    "dub1"
+  ],
+  "rewrites": [
+    {
+      "source": "/api/py/:path*",
+      "destination": "/api/index"
+    }
+  ],
   "functions": {
     "api/index.py": {
       "maxDuration": 300,
