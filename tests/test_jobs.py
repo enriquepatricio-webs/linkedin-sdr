@@ -242,7 +242,7 @@ def test_session_error_marks_settings(env, monkeypatch):
 def test_search_parsing(monkeypatch):
     class Api:
         def search(self, params, limit, offset):
-            assert "(key:title,value:List(CEO  COO))" in params["filters"]
+            assert "(key:title,value:List(CEO COO))" in params["filters"]
             return [
                 {"entityUrn": "urn:li:fsd_entityResultViewModel:(urn:li:fsd_profile:ACoAAX,SEARCH_SRP,DEFAULT)",
                  "navigationUrl": "https://www.linkedin.com/in/ana-lopez?miniProfileUrn=x",

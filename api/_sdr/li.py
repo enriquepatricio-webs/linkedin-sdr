@@ -80,7 +80,7 @@ def me(api: Linkedin) -> Dict:
 
 def _clean(value: str) -> str:
     # La búsqueda viaja dentro de las variables de GraphQL: paréntesis, comas y dos puntos la rompen.
-    return re.sub(r"[(),:]", " ", value or "").strip()
+    return " ".join(re.sub(r"[(),:]", " ", value or "").split())
 
 
 def _public_id(url: str) -> Optional[str]:
