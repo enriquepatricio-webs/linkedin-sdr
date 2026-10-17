@@ -49,7 +49,8 @@ def _icp(s: Dict, campaign: Dict) -> str:
 RULES = (
     "Reglas: escribe como una persona real, no como una plantilla. Nada de 'Espero que estés bien', "
     "ni halagos genéricos, ni emojis, ni enlaces, ni signos de exclamación seguidos. No inventes datos "
-    "del perfil ni de la empresa. Tutea salvo que el tono indique lo contrario."
+    "del perfil ni de la empresa. Si citas un caso real, usa sus datos exactos sin cambiarlos. "
+    "Tutea salvo que el tono indique lo contrario."
 )
 
 

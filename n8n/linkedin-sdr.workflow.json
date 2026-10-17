@@ -186,7 +186,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Un lead por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['score'] === undefined || data['score'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id } });\n});\nreturn out;\n"
+        "jsCode": "// DeepSeek puede llegar ya como objeto (formato JSON) o como texto: aceptamos ambos.\nconst source = $('Un lead por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const j = item.json || {};\n  let data = null;\n  if (j['score'] !== undefined && j['score'] !== null) {\n    data = { ...j };\n  } else {\n    const raw = String(j.text ?? j.output ?? '');\n    try { data = JSON.parse(raw); } catch (e) {\n      const m = raw.match(/\\{[\\s\\S]*\\}/);\n      if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n    }\n  }\n  if (!data || data['score'] === undefined || data['score'] === null) return;\n  delete data.text; delete data.output;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id } });\n});\nreturn out;\n"
       },
       "name": "Parsear cualificación",
       "type": "n8n-nodes-base.code",
@@ -450,7 +450,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Un mensaje por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['message'] === undefined || data['message'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, kind: src.kind } });\n});\nreturn out;\n"
+        "jsCode": "// DeepSeek puede llegar ya como objeto (formato JSON) o como texto: aceptamos ambos.\nconst source = $('Un mensaje por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const j = item.json || {};\n  let data = null;\n  if (j['message'] !== undefined && j['message'] !== null) {\n    data = { ...j };\n  } else {\n    const raw = String(j.text ?? j.output ?? '');\n    try { data = JSON.parse(raw); } catch (e) {\n      const m = raw.match(/\\{[\\s\\S]*\\}/);\n      if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n    }\n  }\n  if (!data || data['message'] === undefined || data['message'] === null) return;\n  delete data.text; delete data.output;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, kind: src.kind } });\n});\nreturn out;\n"
       },
       "name": "Parsear mensaje",
       "type": "n8n-nodes-base.code",
@@ -661,7 +661,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Une la respuesta de DeepSeek con el lead que la originó y descarta respuestas no válidas.\nconst source = $('Una respuesta por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const raw = String(item.json.text ?? item.json.output ?? '');\n  let data = null;\n  try { data = JSON.parse(raw); } catch (e) {\n    const m = raw.match(/\\{[\\s\\S]*\\}/);\n    if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n  }\n  if (!data || data['intent'] === undefined || data['intent'] === null) return;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, message_id: src.message_id } });\n});\nreturn out;\n"
+        "jsCode": "// DeepSeek puede llegar ya como objeto (formato JSON) o como texto: aceptamos ambos.\nconst source = $('Una respuesta por item').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const j = item.json || {};\n  let data = null;\n  if (j['intent'] !== undefined && j['intent'] !== null) {\n    data = { ...j };\n  } else {\n    const raw = String(j.text ?? j.output ?? '');\n    try { data = JSON.parse(raw); } catch (e) {\n      const m = raw.match(/\\{[\\s\\S]*\\}/);\n      if (m) { try { data = JSON.parse(m[0]); } catch (e2) {} }\n    }\n  }\n  if (!data || data['intent'] === undefined || data['intent'] === null) return;\n  delete data.text; delete data.output;\n  const src = source[i].json;\n  out.push({ json: { ...data, lead_id: src.lead_id, message_id: src.message_id } });\n});\nreturn out;\n"
       },
       "name": "Parsear respuesta",
       "type": "n8n-nodes-base.code",
