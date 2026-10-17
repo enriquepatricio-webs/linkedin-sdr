@@ -22,10 +22,18 @@ app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/p
 
 
 def auth(x_api_key: Optional[str] = Header(default=None), authorization: Optional[str] = Header(default=None)):
-    expected = os.environ.get("SDR_API_KEY", "")
-    given = x_api_key or (authorization or "").removeprefix("Bearer ").strip()
-    if not expected or not given or not hmac.compare_digest(expected, given):
-        raise HTTPException(status_code=401, detail="API key inválida")
+    # Los mensajes distinguen el fallo sin revelar la clave (sólo longitudes, para detectar espacios).
+    expected = os.environ.get("SDR_API_KEY", "").strip()
+    given = (x_api_key or (authorization or "").removeprefix("Bearer ")).strip()
+    if not expected:
+        raise HTTPException(status_code=500, detail="SDR_API_KEY no está configurada en este despliegue de Vercel")
+    if not given:
+        raise HTTPException(status_code=401, detail="Falta la cabecera x-api-key")
+    if not hmac.compare_digest(expected, given):
+        raise HTTPException(
+            status_code=401,
+            detail=f"API key inválida (recibidos {len(given)} caracteres, se esperan {len(expected)})",
+        )
 
 
 @app.exception_handler(LinkedInError)
