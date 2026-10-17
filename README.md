@@ -77,17 +77,10 @@ Tras añadir las variables, vuelve a desplegar (Deployments → Redeploy) y entr
 
 ### 4. n8n
 
-1. Importa `n8n/linkedin-sdr.workflow.json`.
-2. Los nodos HTTP ya apuntan a `https://linkedin-sdr.vercel.app` (producción). Si usas otro dominio, busca y
-   reemplaza en el JSON antes de importarlo.
-3. Crea la credencial **Custom Auth** llamada `SDR API`:
-   ```json
-   { "headers": { "x-api-key": "TU_SDR_API_KEY" } }
-   ```
-   (añade `"x-vercel-protection-bypass": "…"` si mantienes la protección de Vercel).
-4. En los tres nodos *OpenRouter* elige tu credencial existente. El modelo es `deepseek/deepseek-chat`; puedes
-   cambiarlo por la versión de DeepSeek que prefieras.
-5. Activa el workflow. Zona horaria: Europe/Madrid.
+El workflow ya está creado en https://n8n.thecotocompany.com/workflow/bHhfhvrgePh3kppl (zona horaria Europe/Madrid).
+Usa las credenciales existentes `SDR API (x-api-key)` (Header Auth: nombre `x-api-key`, valor = `SDR_API_KEY`) y
+`OpenRouter account`, con el modelo `deepseek/deepseek-chat`. `n8n/linkedin-sdr.workflow.json` es una copia para
+importarlo en otra instancia.
 
 | Disparador | Frecuencia |
 |---|---|
