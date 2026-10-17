@@ -57,7 +57,10 @@ def make_client(settings: Dict) -> Linkedin:
 
 def _json(res, what: str):
     if res.status_code in (401, 403) or "/login" in (res.url or "") or "/checkpoint" in (res.url or ""):
-        raise SessionError(f"LinkedIn rechazó la sesión ({res.status_code}) en {what}")
+        # Pistas para distinguir sesión anulada (li_at=delete me) de CSRF o bloqueo de IP.
+        cookies = res.headers.get("set-cookie", "")
+        hint = "LinkedIn borró li_at: sesión cerrada" if "li_at=delete" in cookies else res.text[:120].replace("\n", " ")
+        raise SessionError(f"LinkedIn rechazó la sesión ({res.status_code}) en {what}. {hint}")
     if res.status_code >= 400:
         raise LinkedInError(f"LinkedIn devolvió {res.status_code} en {what}: {res.text[:200]}")
     try:
