@@ -47,8 +47,8 @@ Todas llevan el prefijo `sdr_`, tienen RLS activado y ninguna política: sólo l
 
 ### 2. Vercel
 
-El proyecto `linkedin-sdr` ya está enlazado a este repositorio; su rama de producción es `claude/exciting-turing-d26cd7`
-(cada push a esa rama despliega en https://linkedin-sdr.vercel.app). En **Settings → Environment Variables** añade
+El proyecto `linkedin-sdr` ya está enlazado a este repositorio; su rama de producción es `main`
+(cada push a `main` despliega en https://linkedin-sdr.vercel.app; el resto de ramas son previews sin las variables de producción). En **Settings → Environment Variables** añade
 (Production y Preview):
 
 | Variable | Valor |
