@@ -145,6 +145,59 @@ class SDR:
         self.mark_session(True, profile=profile)
         return {"ok": True, "profile": profile}
 
+    def sync_session(self, cookies: Dict, user_agent: str = "", accept_language: str = "", source: str = "extension") -> Dict:
+        """Sesión enviada por la extensión desde el navegador de Enrique.
+
+        Si es la misma que ya funciona sólo se apunta la hora (la extensión avisa cada 30 min);
+        si cambia se comprueba con LinkedIn antes de dar paso al motor. Una cuenta distinta a la
+        ya conectada se rechaza, como el "identity conflict" de WaLead.
+        """
+        cookies = li.clean_cookies(cookies)
+        li_at = cookies.get("li_at", "")
+        jsessionid = cookies.get("JSESSIONID", "").strip('"')
+        if not li_at or not jsessionid:
+            raise JobError("Faltan li_at o JSESSIONID: Enrique no tiene la sesión de LinkedIn abierta en el navegador")
+
+        s = self.settings
+        values = {
+            "li_at": li_at,
+            "jsessionid": jsessionid,
+            "li_cookies": cookies,
+            "li_user_agent": (user_agent or "").strip()[:500] or s.get("li_user_agent"),
+            "li_accept_language": (accept_language or "").strip()[:200] or s.get("li_accept_language"),
+            "li_session_source": source[:40] or "extension",
+            "li_session_synced_at": now_iso(),
+        }
+        same = li_at == s.get("li_at") and jsessionid == (s.get("jsessionid") or "").strip('"')
+        checked = s.get("li_session_checked_at")
+        fresh = bool(checked) and _now() - datetime.fromisoformat(checked) < timedelta(hours=6)
+        if same and s.get("li_session_status") == "ok" and fresh:
+            self.db.update("sdr_settings", {"id": "eq.1"}, values)
+            return {"ok": True, "changed": False, "profile": s.get("li_profile")}
+
+        candidate = {**s, **values}
+        try:
+            profile = li.me(self._client_factory(candidate))
+        except li.LinkedInError as e:
+            # Se guardan igualmente: son las cookies más recientes del navegador.
+            self.db.update("sdr_settings", {"id": "eq.1"}, values)
+            self._settings = candidate
+            return self._session_failed(e)
+
+        previous = (s.get("li_profile") or {}).get("urn_id")
+        if previous and profile.get("urn_id") and previous != profile["urn_id"]:
+            raise JobError(
+                f"La sesión del navegador es de {profile.get('name') or 'otra cuenta'}, no de "
+                f"{(s.get('li_profile') or {}).get('name') or 'la cuenta conectada'}. Entra en LinkedIn con la cuenta correcta."
+            )
+
+        self.db.update("sdr_settings", {"id": "eq.1"}, values)
+        self._settings = candidate
+        self.mark_session(True, profile=profile)
+        if not same:
+            self.log("session_synced", f"Sesión de LinkedIn actualizada desde {values['li_session_source']}")
+        return {"ok": True, "changed": not same, "profile": profile}
+
     # ---------- 1. prospección ----------
 
     def prospect(self, force: bool = False, campaign_id: Optional[str] = None) -> Dict:

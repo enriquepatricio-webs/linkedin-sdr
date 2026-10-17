@@ -14,8 +14,8 @@ lee las respuestas y prepara la contestación. Todo se controla desde un panel.
  Supabase (tablas sdr_*)
 ```
 
-- **LinkedIn**: [`open-linkedin-api`](https://github.com/EseToni/open-linkedin-api) con las cookies `li_at` + `JSESSIONID`
-  (`api/_sdr/li.py`).
+- **LinkedIn**: [`open-linkedin-api`](https://github.com/EseToni/open-linkedin-api) con la sesión del navegador de
+  Enrique (`api/_sdr/li.py`). La extensión de Chrome de `extension/` la mantiene sincronizada (ver más abajo).
 - **Lógica**: límites diarios/semanales, horario laboral, estados y bloqueos viven en `api/_sdr/jobs.py`. n8n sólo
   dispara los pasos y hace de puente con la IA, así que si el motor está apagado nada sale a LinkedIn.
 - **IA**: la API devuelve los prompts ya montados (`api/_sdr/prompts.py`) con el contexto de Ajustes y de la campaña;
@@ -74,8 +74,8 @@ Tras añadir las variables, vuelve a desplegar (Deployments → Redeploy) y entr
 1. **Ajustes → Empresa y propuesta**: describe qué hace The Coto Company, diferenciales, casos reales y la llamada a
    la acción. La IA no cualifica nada mientras esté vacío.
 2. **Ajustes → Cliente ideal**.
-3. **Ajustes → Sesión de LinkedIn**: pega `li_at` y `JSESSIONID` del navegador de Enrique y pulsa *Guardar y comprobar*.
-   Recomendado: un proxy residencial en España (Vercel sale por IPs de EE. UU.).
+3. **Ajustes → Sesión de LinkedIn**: instala la extensión (enlace en esa misma tarjeta) y pulsa *Conectar con la
+   extensión*. Plan B: pegar `li_at` y `JSESSIONID` a mano. Muy recomendado: un proxy residencial en España.
 4. **Campañas → Nueva campaña**: filtros de búsqueda (usa *Probar búsqueda*), instrucciones y secuencia. Actívala.
 5. **Resumen → Encender motor**.
 
@@ -108,6 +108,30 @@ importarlo en otra instancia.
 - `open-linkedin-api` usa la API interna de LinkedIn. No es oficial y usarla puede ir contra sus condiciones; algunos
   endpoints (perfil completo, bandeja antigua) pueden dejar de funcionar. Los fallos quedan en **Actividad** y el lead
   sigue adelante con los datos de la búsqueda cuando el perfil completo no está disponible.
+
+## Sesión de LinkedIn: extensión de Chrome (cómo lo hace WaLead)
+
+Analizamos walead.ai con [REA](https://github.com/morluto/rea) (su app web y su extensión de Chrome
+`akpokhkjhnleeohiolaokkjcooilhiai`). WaLead no pide cookies ni contraseña: su extensión abre linkedin.com, espera a que
+exista `li_at`, lee **todas** las cookies de LinkedIn más el `navigator.userAgent` y las sube a su API
+(`/api/linkedin/upload-linkedin-account`). Después envía desde sus servidores, cada cuenta por un **proxy residencial
+dedicado de su país**, con límites, horario y "health score".
+
+Aquí hacemos lo mismo:
+
+- `extension/` (Manifest V3, ID fijo `bpljabfhjpbkncjipleeakknpaccfiff`): lee las cookies de `www.linkedin.com` y
+  `.linkedin.com` y el navegador, y las manda a `POST /api/py/linkedin/session` con su propia clave
+  (`sdr_settings.extension_token`, nunca `SDR_API_KEY`). Lo hace al conectar, cada vez que cambian `li_at` o
+  `JSESSIONID` y como latido cada 2 h. No llama a LinkedIn ni hace scraping.
+- El panel se comunica con ella por `externally_connectable` (botón *Conectar con la extensión* en Ajustes), igual que
+  WaLead. Si no hay sesión abre `linkedin.com/login` y espera a que Enrique entre.
+- El servidor usa todas esas cookies (`bcookie`, `bscookie`, `lidc`...) y el mismo user agent e idioma del navegador:
+  un `li_at` suelto desde otra máquina es lo que LinkedIn trata como sesión robada. Si llega la misma sesión ya
+  comprobada no se llama a LinkedIn; si llega otra cuenta distinta se rechaza.
+- Proxy: el campo de Ajustes acepta `http://usuario:clave@host:puerto`. Con un proxy residencial o ISP en España la
+  conexión del servidor se parece a la de Enrique, que es lo que evita los cierres de sesión.
+
+Tras cambiar algo en `extension/` ejecuta `scripts/pack-extension.sh` (un test comprueba que el zip está al día).
 
 ## Desarrollo local
 

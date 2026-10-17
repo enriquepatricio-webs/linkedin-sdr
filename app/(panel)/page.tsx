@@ -88,8 +88,8 @@ export default async function Dashboard() {
 
       {settings.li_session_status === "invalid" && (
         <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          La sesión de LinkedIn ya no es válida y el motor no hará nada en LinkedIn hasta que pegues cookies nuevas en{" "}
-          <Link href="/ajustes#linkedin" className="font-semibold underline">Ajustes</Link>.
+          La sesión de LinkedIn ya no es válida y el motor no hará nada en LinkedIn. Entra en LinkedIn en Chrome (la extensión la
+          sincroniza sola) o conéctala desde <Link href="/ajustes#linkedin" className="font-semibold underline">Ajustes</Link>.
         </div>
       )}
 

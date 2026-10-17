@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -95,7 +96,7 @@ export async function saveLinkedInSession(_: ActionState, fd: FormData): Promise
   const values: Record<string, unknown> = { li_proxy: str(fd, "li_proxy") || null, updated_at: new Date().toISOString() };
   if (str(fd, "li_at")) values.li_at = str(fd, "li_at");
   if (str(fd, "jsessionid")) values.jsessionid = str(fd, "jsessionid");
-  if (values.li_at || values.jsessionid) values.li_session_status = "unknown";
+  if (values.li_at || values.jsessionid) Object.assign(values, { li_session_status: "unknown", li_session_source: "manual" });
   const { error } = await db().from("sdr_settings").update(values).eq("id", 1);
   if (error) return { ok: false, message: error.message };
   const r = await py("/linkedin/check");
@@ -105,6 +106,21 @@ export async function saveLinkedInSession(_: ActionState, fd: FormData): Promise
     return { ok: true, message: `Sesión válida: conectado como ${p?.name ?? "?"}` };
   }
   return { ok: false, message: `Guardado, pero la sesión no funciona: ${r.error}` };
+}
+
+// Clave propia de la extensión de Chrome (no es SDR_API_KEY). Se crea la primera vez que se conecta.
+export async function extensionToken(): Promise<{ ok: boolean; token?: string; message?: string }> {
+  const { data, error } = await db().from("sdr_settings").select("extension_token").eq("id", 1).single();
+  if (error) return { ok: false, message: error.message };
+  if (data?.extension_token) return { ok: true, token: data.extension_token };
+  const token = randomBytes(32).toString("hex");
+  const { error: e2 } = await db().from("sdr_settings").update({ extension_token: token }).eq("id", 1);
+  if (e2) return { ok: false, message: e2.message };
+  return { ok: true, token };
+}
+
+export async function refreshPanel() {
+  touch();
 }
 
 // ---------- trabajos manuales ----------

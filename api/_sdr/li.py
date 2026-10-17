@@ -1,6 +1,7 @@
 """Envoltorio sobre open-linkedin-api (https://github.com/EseToni/open-linkedin-api).
 
-La sesión es la de Enrique: cookies li_at + JSESSIONID copiadas del navegador. Las llamadas
+La sesión es la de Enrique: la extensión de Chrome (carpeta extension/) sincroniza las cookies
+y el user agent de su navegador; también se pueden pegar li_at + JSESSIONID a mano. Las llamadas
 que la librería no protege (respuestas no JSON, sesión caducada) se comprueban aquí para
 poder marcar la sesión como inválida desde el panel.
 """
@@ -36,6 +37,18 @@ class SessionError(LinkedInError):
     """Las cookies ya no valen: hay que pegarlas de nuevo en Ajustes."""
 
 
+COOKIE_NAME = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+
+
+def clean_cookies(cookies: Dict) -> Dict[str, str]:
+    """Cookies de linkedin.com tal y como las manda la extensión (nombre → valor), sin basura."""
+    out = {}
+    for name, value in (cookies or {}).items():
+        if isinstance(value, str) and COOKIE_NAME.match(str(name)) and 0 < len(value) <= 4096:
+            out[str(name)] = value.strip()
+    return out
+
+
 def make_client(settings: Dict) -> Linkedin:
     li_at = (settings.get("li_at") or os.environ.get("LINKEDIN_LI_AT") or "").strip()
     jsessionid = (settings.get("jsessionid") or os.environ.get("LINKEDIN_JSESSIONID") or "").strip()
@@ -44,6 +57,11 @@ def make_client(settings: Dict) -> Linkedin:
 
     jsessionid = jsessionid.strip('"')
     jar = RequestsCookieJar()
+    # Como WaLead: todas las cookies del navegador (bcookie, bscookie, lidc...), no sólo li_at.
+    # Un li_at sin el bcookie del navegador que lo creó es lo que LinkedIn trata como sesión robada.
+    for name, value in clean_cookies(settings.get("li_cookies") or {}).items():
+        if name not in ("li_at", "JSESSIONID"):
+            jar.set(name, value, domain=".linkedin.com", path="/")
     jar.set("li_at", li_at, domain=".www.linkedin.com", path="/")
     jar.set("JSESSIONID", f'"{jsessionid}"', domain=".www.linkedin.com", path="/")
 
@@ -51,7 +69,10 @@ def make_client(settings: Dict) -> Linkedin:
     proxies = {"http": proxy, "https": proxy} if proxy else {}
 
     api = Linkedin("", "", cookies=jar, proxies=proxies)
-    api.client.session.headers["user-agent"] = USER_AGENT
+    headers = api.client.session.headers
+    headers["user-agent"] = (settings.get("li_user_agent") or "").strip() or USER_AGENT
+    headers["accept-language"] = (settings.get("li_accept_language") or "").strip() or "es-ES,es;q=0.9,en;q=0.8"
+    headers["x-li-lang"] = "es_ES" if headers["accept-language"].lower().startswith("es") else "en_US"
     return api
 
 

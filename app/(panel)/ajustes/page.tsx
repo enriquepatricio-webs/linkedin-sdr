@@ -1,5 +1,6 @@
 import { saveLinkedInSession, saveSettings, toggleSetting } from "@/app/actions";
 import { ActionForm, JobButton, Submit } from "@/components/forms";
+import { ExtensionConnect } from "@/components/extension-connect";
 import { Card, Field, PageHeader, btnPrimary, btnSecondary, input } from "@/components/ui";
 import { getSettings } from "@/lib/data";
 import { fmtDate } from "@/lib/labels";
@@ -53,23 +54,16 @@ export default async function SettingsPage() {
           <span className="text-xs text-slate-500">Comprobada: {fmtDate(s.li_session_checked_at)}</span>
           <JobButton job="check" label="Comprobar ahora" className={btnSecondary} />
         </div>
-        <details className="mb-4 text-sm text-slate-600">
-          <summary className="cursor-pointer font-medium text-slate-800">Cómo sacar las cookies</summary>
-          <ol className="mt-2 list-decimal space-y-1 pl-5">
-            <li>Entra en linkedin.com con la cuenta de Enrique en Chrome.</li>
-            <li>Abre las herramientas de desarrollador (F12) → Aplicación → Cookies → https://www.linkedin.com.</li>
-            <li>Copia el valor de <code>li_at</code> y el de <code>JSESSIONID</code> (empieza por <code>ajax:</code>).</li>
-            <li>No cierres sesión en el navegador: eso invalida las cookies. Si caducan, el panel te avisa.</li>
-          </ol>
-        </details>
-        <ActionForm action={saveLinkedInSession} className="grid gap-4 md:grid-cols-2">
-          <Field label="li_at" hint={`Actual: ${mask(s.li_at)}. Déjalo vacío para no cambiarla.`}>
-            <input name="li_at" type="password" autoComplete="off" className={input} />
-          </Field>
-          <Field label="JSESSIONID" hint={`Actual: ${mask(s.jsessionid)}`}>
-            <input name="jsessionid" type="password" autoComplete="off" className={input} placeholder="ajax:123456789…" />
-          </Field>
-          <Field label="Proxy (recomendado)" hint="Vercel sale desde IPs de centros de datos de EE. UU. Un proxy residencial en España reduce el riesgo de que LinkedIn cierre la sesión. Formato http://usuario:clave@host:puerto">
+        <ExtensionConnect />
+        <p className="mt-3 text-xs text-slate-500">
+          Última sincronización: {fmtDate(s.li_session_synced_at)}
+          {s.li_session_source ? ` (${s.li_session_source.startsWith("extension") ? "extensión" : s.li_session_source})` : ""}
+        </p>
+        <ActionForm action={saveLinkedInSession} className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field
+            label="Proxy residencial en España (muy recomendado)"
+            hint="Lo que hace WaLead: cada cuenta sale por un proxy residencial de su país, así LinkedIn ve una conexión desde España y no desde un centro de datos de EE. UU. Formato http://usuario:clave@host:puerto"
+          >
             <input name="li_proxy" defaultValue={s.li_proxy ?? ""} className={input} />
           </Field>
           <div className="flex items-end">
@@ -77,6 +71,22 @@ export default async function SettingsPage() {
               Guardar y comprobar
             </Submit>
           </div>
+          <details className="text-sm text-slate-600 md:col-span-2">
+            <summary className="cursor-pointer font-medium text-slate-800">Plan B: pegar las cookies a mano</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5">
+              <li>Entra en linkedin.com con la cuenta de Enrique en Chrome.</li>
+              <li>Abre las herramientas de desarrollador (F12) → Aplicación → Cookies → https://www.linkedin.com.</li>
+              <li>Copia el valor de <code>li_at</code> y el de <code>JSESSIONID</code> (empieza por <code>ajax:</code>).</li>
+            </ol>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <Field label="li_at" hint={`Actual: ${mask(s.li_at)}. Déjalo vacío para no cambiarla.`}>
+                <input name="li_at" type="password" autoComplete="off" className={input} />
+              </Field>
+              <Field label="JSESSIONID" hint={`Actual: ${mask(s.jsessionid)}`}>
+                <input name="jsessionid" type="password" autoComplete="off" className={input} placeholder="ajax:123456789…" />
+              </Field>
+            </div>
+          </details>
         </ActionForm>
       </Card>
 

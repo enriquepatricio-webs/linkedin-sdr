@@ -102,6 +102,13 @@ class EngageRun(BaseModel):
     engagement_id: Optional[str] = None
 
 
+class SessionSync(BaseModel):
+    cookies: Dict[str, Any] = {}
+    user_agent: Optional[str] = None
+    accept_language: Optional[str] = None
+    source: Optional[str] = None
+
+
 class SearchPreview(BaseModel):
     search_keywords: str = ""
     search_title: str = ""
@@ -135,6 +142,26 @@ def status():
 @app.post("/api/py/linkedin/check", dependencies=[Depends(auth)])
 def linkedin_check():
     return SDR().check_session()
+
+
+@app.post("/api/py/linkedin/session")
+def linkedin_session(
+    body: SessionSync,
+    x_extension_token: Optional[str] = Header(default=None),
+    x_api_key: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    # La extensión de Chrome se identifica con su propia clave (sdr_settings.extension_token),
+    # que el panel genera al emparejarla; así SDR_API_KEY nunca sale del servidor.
+    sdr = SDR()
+    if x_extension_token:
+        expected = (sdr.settings.get("extension_token") or "").strip()
+        if not expected or not hmac.compare_digest(expected, x_extension_token.strip()):
+            raise HTTPException(status_code=401, detail="Clave de la extensión inválida: vuelve a conectarla desde Ajustes del panel")
+    else:
+        auth(x_api_key=x_api_key, authorization=authorization, key_param=None)
+    cookies = {k: v for k, v in body.cookies.items() if isinstance(v, str)}
+    return sdr.sync_session(cookies, body.user_agent or "", body.accept_language or "", body.source or "extension")
 
 
 @app.post("/api/py/linkedin/search-preview", dependencies=[Depends(auth)])

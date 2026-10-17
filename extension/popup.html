@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; width: 300px; margin: 0; padding: 14px; color: #0f172a; }
+  h1 { font-size: 14px; margin: 0 0 10px; }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+  .ok { background: #d1fae5; color: #065f46; } .bad { background: #fee2e2; color: #991b1b; } .mid { background: #f1f5f9; color: #475569; }
+  p { margin: 8px 0; color: #475569; } .err { color: #b91c1c; }
+  button { width: 100%; margin-top: 8px; padding: 7px; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; background: #0f172a; color: #fff; }
+  button.sec { background: #e2e8f0; color: #0f172a; }
+  details { margin-top: 12px; } input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+</style>
+</head>
+<body>
+  <h1>Coto SDR · LinkedIn</h1>
+  <div><span id="status" class="pill mid">…</span> <span id="profile"></span></div>
+  <p id="last"></p>
+  <p id="error" class="err"></p>
+  <button id="sync">Sincronizar ahora</button>
+  <button id="connect" class="sec">Abrir LinkedIn y conectar</button>
+  <details>
+    <summary>Conectar a mano</summary>
+    <p>Lo normal es pulsar «Conectar con la extensión» en Ajustes del panel. Si no puedes, pega aquí la clave que muestra el panel.</p>
+    <select id="api"><option>https://linkedin-sdr.vercel.app</option><option>http://localhost:3000</option></select>
+    <input id="token" type="password" placeholder="Clave de la extensión" autocomplete="off" />
+    <button id="save" class="sec">Guardar y conectar</button>
+  </details>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

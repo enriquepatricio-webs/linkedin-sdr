@@ -68,6 +68,7 @@ export const EVENT: Record<string, string> = {
   reply_classified: "Respuesta analizada",
   no_response: "Sin respuesta",
   session_invalid: "Sesión de LinkedIn inválida",
+  session_synced: "Sesión de LinkedIn actualizada",
   manual: "Acción manual",
   posts_collected: "Publicaciones recogidas",
   post_liked: "Me gusta",

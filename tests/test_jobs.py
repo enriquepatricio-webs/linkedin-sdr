@@ -387,3 +387,89 @@ def test_age_and_profile_posts():
     posts = li.profile_posts(Api(), "X")
     assert posts == [{"post_urn": "urn:li:activity:111", "post_url": "https://www.linkedin.com/feed/update/urn:li:activity:111/",
                       "author_name": "Ana", "author_headline": "CEO", "post_text": "Abrimos sede", "post_age": "2d •"}]
+
+
+BROWSER = {"li_at": "AQEnuevo", "JSESSIONID": '"ajax:123"', "bcookie": '"v=2&abc"', "lidc": "b=x", "bad name": "x"}
+
+
+def test_session_sync(env, monkeypatch):
+    db, _ = env
+    calls = []
+    monkeypatch.setattr(li, "me", lambda api: calls.append(api) or {"urn_id": ME, "name": "Enrique"})
+
+    r = sdr(db).sync_session(BROWSER, "Mozilla/5.0 Navegador", "es-ES,es")
+    s = db.one("sdr_settings", {"id": "eq.1"})
+    assert r["ok"] and r["changed"] and len(calls) == 1
+    assert s["li_at"] == "AQEnuevo" and s["jsessionid"] == "ajax:123" and s["li_session_status"] == "ok"
+    assert s["li_cookies"]["bcookie"] == '"v=2&abc"' and "bad name" not in s["li_cookies"]
+    assert s["li_user_agent"] == "Mozilla/5.0 Navegador" and s["li_session_source"] == "extension"
+    assert db.count("sdr_events", {"type": "eq.session_synced"}) == 1
+
+    # Mismo navegador, sesión ya comprobada: no se vuelve a llamar a LinkedIn.
+    r = sdr(db).sync_session(BROWSER, "Mozilla/5.0 Navegador")
+    assert r == {"ok": True, "changed": False, "profile": s["li_profile"]} and len(calls) == 1
+
+    # Otra cuenta: se rechaza y no se toca la sesión guardada.
+    monkeypatch.setattr(li, "me", lambda api: {"urn_id": "OTRA", "name": "Otra"})
+    with pytest.raises(jobs_mod.JobError):
+        sdr(db).sync_session({**BROWSER, "li_at": "AQEotra"})
+    assert db.one("sdr_settings", {"id": "eq.1"})["li_at"] == "AQEnuevo"
+
+    # LinkedIn la rechaza: se guarda (es la más reciente) pero queda inválida.
+    def boom(api):
+        raise li.SessionError("401")
+
+    monkeypatch.setattr(li, "me", boom)
+    assert sdr(db).sync_session({**BROWSER, "li_at": "AQEcaducada"})["ok"] is False
+    s = db.one("sdr_settings", {"id": "eq.1"})
+    assert s["li_at"] == "AQEcaducada" and s["li_session_status"] == "invalid"
+
+    with pytest.raises(jobs_mod.JobError):
+        sdr(db).sync_session({"bcookie": "x"})
+
+
+def test_make_client_uses_browser_cookies():
+    api = li.make_client({"li_at": "AQE", "jsessionid": "ajax:1", "li_cookies": BROWSER,
+                          "li_user_agent": "UA-navegador", "li_accept_language": "es-ES,es;q=0.9"})
+    jar = api.client.session.cookies
+    assert jar.get("bcookie") == '"v=2&abc"' and jar.get("lidc") == "b=x"
+    assert jar.get("li_at", domain=".www.linkedin.com") == "AQE"
+    h = api.client.session.headers
+    assert h["csrf-token"] == "ajax:1" and h["user-agent"] == "UA-navegador" and h["x-li-lang"] == "es_ES"
+
+
+def test_api_session_extension_token(monkeypatch):
+    monkeypatch.setenv("SDR_API_KEY", "secreto")
+    from fastapi.testclient import TestClient
+    import index
+
+    got = {}
+
+    class Stub:
+        settings = {"extension_token": "tok-ext"}
+
+        def sync_session(self, cookies, ua, lang, source):
+            got.update(cookies=cookies, ua=ua, source=source)
+            return {"ok": True}
+
+    monkeypatch.setattr(index, "SDR", Stub)
+    client = TestClient(index.app)
+    body = {"cookies": {"li_at": "a", "JSESSIONID": "b", "n": 1}, "user_agent": "UA", "source": "alarm"}
+    assert client.post("/api/py/linkedin/session", json=body).status_code == 401
+    assert client.post("/api/py/linkedin/session", json=body, headers={"x-extension-token": "otro"}).status_code == 401
+    assert client.post("/api/py/linkedin/session", json=body, headers={"x-extension-token": "tok-ext"}).json() == {"ok": True}
+    assert got == {"cookies": {"li_at": "a", "JSESSIONID": "b"}, "ua": "UA", "source": "alarm"}
+    assert client.post("/api/py/linkedin/session", json=body, headers={"x-api-key": "secreto"}).status_code == 200
+
+
+def test_extension_zip_is_up_to_date():
+    import zipfile
+
+    root = os.path.join(os.path.dirname(__file__), "..")
+    with zipfile.ZipFile(os.path.join(root, "public", "coto-sdr-extension.zip")) as z:
+        packed = {n.split("/", 1)[1]: z.read(n) for n in z.namelist() if not n.endswith("/")}
+    files = {}
+    for name in os.listdir(os.path.join(root, "extension")):
+        with open(os.path.join(root, "extension", name), "rb") as f:
+            files[name] = f.read()
+    assert packed == files, "Ejecuta scripts/pack-extension.sh"
