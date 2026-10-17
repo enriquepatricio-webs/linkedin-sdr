@@ -101,11 +101,22 @@ export async function saveLinkedInSession(_: ActionState, fd: FormData): Promise
   if (error) return { ok: false, message: error.message };
   const r = await py("/linkedin/check");
   touch();
+  const proxy = describeProxy(r.proxy as ProxyInfo | null | undefined);
   if (r.ok) {
     const p = r.profile as { name?: string } | undefined;
-    return { ok: true, message: `Sesión válida: conectado como ${p?.name ?? "?"}` };
+    return { ok: true, message: `Sesión válida: conectado como ${p?.name ?? "?"}.${proxy}` };
   }
-  return { ok: false, message: `Guardado, pero la sesión no funciona: ${r.error}` };
+  return { ok: false, message: `Guardado, pero la sesión no funciona: ${r.error}${proxy}` };
+}
+
+type ProxyInfo = { ip?: string; city?: string; region?: string; country?: string; org?: string };
+
+// Lo que ve LinkedIn: si el proxy no sale por España se avisa, que es lo que hace caer la sesión.
+function describeProxy(p: ProxyInfo | null | undefined): string {
+  if (!p) return "";
+  const where = [p.city, p.region, p.country].filter(Boolean).join(", ");
+  const warn = p.country && p.country !== "ES" ? " ⚠️ No sale por España: LinkedIn puede volver a cerrar la sesión." : "";
+  return ` LinkedIn te ve desde ${p.ip ?? "?"} (${where}${p.org ? ` · ${p.org}` : ""}).${warn}`;
 }
 
 // Clave propia de la extensión de Chrome (no es SDR_API_KEY). Se crea la primera vez que se conecta.

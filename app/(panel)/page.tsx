@@ -86,6 +86,13 @@ export default async function Dashboard() {
         </Card>
       )}
 
+      {!settings.li_proxy && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Falta el proxy en España: sin él LinkedIn cierra la sesión a los pocos minutos de usarla desde el servidor, así que el motor
+          no toca LinkedIn. Añádelo en <Link href="/ajustes#linkedin" className="font-semibold underline">Ajustes</Link>.
+        </div>
+      )}
+
       {settings.li_session_status === "invalid" && (
         <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           La sesión de LinkedIn ya no es válida y el motor no hará nada en LinkedIn. Entra en LinkedIn en Chrome (la extensión la

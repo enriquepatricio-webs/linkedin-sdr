@@ -4,6 +4,7 @@ const LABELS = {
 	invalid: ["LinkedIn la rechaza", "bad"],
 	error: ["Error", "bad"],
 	unpaired: ["Sin conectar al panel", "mid"],
+	needs_proxy: ["Guardada, falta el proxy", "mid"],
 }
 
 const $ = (id) => document.getElementById(id)

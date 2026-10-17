@@ -27,6 +27,7 @@ async function setState(values) {
 		invalid: ["!", "#dc2626"],
 		error: ["!", "#dc2626"],
 		unpaired: ["?", "#d97706"],
+		needs_proxy: ["PRX", "#d97706"],
 	}[status] || ["", "#64748b"]
 	await chrome.action.setBadgeText({ text: badge[0] })
 	await chrome.action.setBadgeBackgroundColor({ color: badge[1] })
@@ -78,7 +79,7 @@ async function doSync(reason, force) {
 	const hash = await fingerprint(cookies)
 	const recent = state.lastSyncAt && Date.now() - state.lastSyncAt < HEARTBEAT_HOURS * 3600 * 1000
 	// Misma sesión ya enviada: no se repite (tampoco si LinkedIn la rechazó, para no insistir).
-	if (!force && hash === state.lastHash && recent && ["ok", "invalid"].includes(state.status)) {
+	if (!force && hash === state.lastHash && recent && ["ok", "invalid", "needs_proxy"].includes(state.status)) {
 		return { ok: true, skipped: true }
 	}
 
@@ -106,7 +107,8 @@ async function doSync(reason, force) {
 	}
 	if (!res.ok || !data.ok) {
 		const error = data.error || data.detail || `Error ${res.status}`
-		await setState({ status: res.ok ? "invalid" : "error", lastHash: hash, lastSyncAt: Date.now(), error })
+		const status = data.proxy_required ? "needs_proxy" : res.ok ? "invalid" : "error"
+		await setState({ status, lastHash: hash, lastSyncAt: Date.now(), error })
 		return { ok: false, error }
 	}
 	await setState({

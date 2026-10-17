@@ -29,6 +29,7 @@ const STATUS: Record<string, string> = {
   invalid: "instalada, pero LinkedIn rechaza la sesión",
   error: "instalada, con error al contactar con el SDR",
   unpaired: "instalada, falta conectarla",
+  needs_proxy: "conectada; la sesión está guardada pero falta el proxy en España para usarla",
 };
 
 export function ExtensionConnect() {

@@ -135,6 +135,8 @@ class SDR:
         }
 
     def _guard(self, force: bool, need_hours: bool = True) -> Optional[str]:
+        if li.proxy_required(self.settings):
+            return "falta el proxy en España (Ajustes)"  # ni siquiera a mano: quemaría la sesión
         if force:
             return None
         if not self.settings.get("engine_enabled"):
@@ -164,12 +166,20 @@ class SDR:
     # ---------- sesión ----------
 
     def check_session(self) -> Dict:
+        if li.proxy_required(self.settings):
+            return {"ok": False, "proxy_required": True, "error": li.PROXY_MSG}
+        proxy = None
+        if li.proxy_url(self.settings):
+            try:
+                proxy = li.proxy_info(li.proxy_url(self.settings))
+            except li.LinkedInError as e:
+                return {"ok": False, "error": str(e)}  # el proxy falla: la sesión no tiene la culpa
         try:
             profile = li.me(self.api)
         except li.LinkedInError as e:
-            return self._session_failed(e)
+            return {**self._session_failed(e), "proxy": proxy}
         self.mark_session(True, profile=profile)
-        return {"ok": True, "profile": profile}
+        return {"ok": True, "profile": profile, "proxy": proxy}
 
     def sync_session(self, cookies: Dict, user_agent: str = "", accept_language: str = "", source: str = "extension") -> Dict:
         """Sesión enviada por la extensión desde el navegador de Enrique.
@@ -202,6 +212,11 @@ class SDR:
             return {"ok": True, "changed": False, "profile": s.get("li_profile")}
 
         candidate = {**s, **values}
+        if li.proxy_required(candidate):
+            # Se guarda sin probarla: probarla desde el servidor sin proxy es lo que la quema.
+            self.db.update("sdr_settings", {"id": "eq.1"}, {**values, "li_session_status": "unknown"})
+            self._settings = {**candidate, "li_session_status": "unknown"}
+            return {"ok": False, "proxy_required": True, "error": "Sesión guardada. " + li.PROXY_MSG}
         try:
             profile = li.me(self._client_factory(candidate))
         except li.LinkedInError as e:

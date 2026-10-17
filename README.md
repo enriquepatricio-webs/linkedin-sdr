@@ -131,8 +131,11 @@ Aquí hacemos lo mismo:
 - La sesión vive en el servidor, como en WaLead: cada respuesta de LinkedIn que renueva cookies (`lidc`,
   `JSESSIONID`, a veces `li_at`) se guarda en `sdr_settings.li_cookies`, igual que haría un navegador. El ordenador de
   Enrique puede estar apagado; la extensión sólo hace falta para conectar o reconectar.
-- Proxy: el campo de Ajustes acepta `http://usuario:clave@host:puerto`. Con un proxy residencial o ISP en España la
-  conexión del servidor se parece a la de Enrique, que es lo que evita los cierres de sesión.
+- **Proxy en España obligatorio.** Comprobado dos veces: la sesión funciona en la primera llamada desde Vercel (centro
+  de datos de EE. UU.) y LinkedIn la anula a los 4-5 minutos. Sin `li_proxy` (o `LINKEDIN_PROXY`) el SDR no toca
+  LinkedIn: la extensión guarda la sesión sin probarla y los trabajos se saltan con "falta el proxy". Usa un proxy ISP
+  o residencial **estático** en España (`http://usuario:clave@host:puerto`); *Guardar y comprobar* muestra la IP,
+  ciudad y proveedor por los que sale. `LINKEDIN_ALLOW_NO_PROXY=1` lo desactiva bajo tu responsabilidad.
 
 Tras cambiar algo en `extension/` ejecuta `scripts/pack-extension.sh` (un test comprueba que el zip está al día).
 

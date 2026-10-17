@@ -148,6 +148,7 @@ def env(monkeypatch):
                                "daily_invite_limit": 2, "weekly_invite_limit": 10, "daily_message_limit": 10,
                                "working_days": [1, 2, 3, 4, 5, 6, 7], "work_start_hour": 0, "work_end_hour": 24,
                                "timezone": "Europe/Madrid", "li_session_status": "ok", "li_profile": {"urn_id": ME},
+                               "li_proxy": "http://u:p@proxy.es:8000",
                                "language": "es", "tone": "cercano", "cta": "llamada"})
     db.insert("sdr_campaigns", {"name": "CEOs Madrid", "status": "active", "search_batch": 3, "search_offset": 0,
                                 "pipeline_buffer": 40, "send_connection_note": True, "first_message_delay_hours": 0,
@@ -429,7 +430,7 @@ def test_session_sync(env, monkeypatch):
 
 
 def test_make_client_uses_browser_cookies():
-    api = li.make_client({"li_at": "AQE", "jsessionid": "ajax:1", "li_cookies": BROWSER,
+    api = li.make_client({"li_at": "AQE", "jsessionid": "ajax:1", "li_cookies": BROWSER, "li_proxy": "http://p.es:1",
                           "li_user_agent": "UA-navegador", "li_accept_language": "es-ES,es;q=0.9"})
     jar = api.client.session.cookies
     assert jar.get("bcookie") == '"v=2&abc"' and jar.get("lidc") == "b=x"
@@ -485,6 +486,7 @@ def test_server_keeps_rotated_cookies(env):
 
     def respond(**cookies):
         res = requests.Response()
+        res.status_code = 200
         for k, v in cookies.items():
             res.cookies.set(k, v, domain=".linkedin.com")
         for hook in session.hooks["response"]:
@@ -503,3 +505,48 @@ def test_server_keeps_rotated_cookies(env):
 
     respond(li_at="delete me")
     assert db.one("sdr_settings", {"id": "eq.1"})["li_at"] == "AQEnuevo"
+
+    res = requests.Response()
+    res.status_code = 401
+    res.cookies.set("JSESSIONID", '"ajax:anonimo"', domain=".linkedin.com")
+    for hook in session.hooks["response"]:
+        hook(res)
+    assert db.one("sdr_settings", {"id": "eq.1"})["jsessionid"] == "ajax:2"
+
+
+def test_no_linkedin_without_proxy(env, monkeypatch):
+    db, fake = env
+    db.update("sdr_settings", {"id": "eq.1"}, {"li_proxy": None})
+    monkeypatch.delenv("LINKEDIN_PROXY", raising=False)
+    monkeypatch.delenv("LINKEDIN_ALLOW_NO_PROXY", raising=False)
+    calls = []
+    monkeypatch.setattr(li, "me", lambda api: calls.append(1) or {"urn_id": ME})
+
+    assert sdr(db).invite(force=True)["skipped"].startswith("falta el proxy")
+    assert sdr(db).prospect(force=True)["skipped"].startswith("falta el proxy")
+    r = sdr(db).check_session()
+    assert r["proxy_required"] and not calls
+    assert db.one("sdr_settings", {"id": "eq.1"})["li_session_status"] == "ok"  # no la da por caducada
+
+    r = sdr(db).sync_session(BROWSER, "UA")
+    row = db.one("sdr_settings", {"id": "eq.1"})
+    assert r["proxy_required"] and not calls and row["li_at"] == "AQEnuevo" and row["li_session_status"] == "unknown"
+    with pytest.raises(li.ProxyRequired):
+        li.make_client({"li_at": "a", "jsessionid": "b"})
+
+    monkeypatch.setenv("LINKEDIN_ALLOW_NO_PROXY", "1")
+    assert li.make_client({"li_at": "a", "jsessionid": "b"})
+
+
+def test_check_session_reports_proxy(env, monkeypatch):
+    db, _ = env
+    monkeypatch.setattr(li, "proxy_info", lambda p: {"ip": "1.2.3.4", "city": "Madrid", "country": "ES", "org": "Movistar"})
+    r = sdr(db).check_session()
+    assert r["ok"] and r["proxy"]["city"] == "Madrid"
+
+    def down(p):
+        raise li.LinkedInError("El proxy no responde")
+
+    monkeypatch.setattr(li, "proxy_info", down)
+    assert sdr(db).check_session()["error"] == "El proxy no responde"
+    assert db.one("sdr_settings", {"id": "eq.1"})["li_session_status"] == "ok"

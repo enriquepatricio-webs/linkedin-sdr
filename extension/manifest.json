@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Coto SDR · Conector de LinkedIn",
   "description": "Mantiene conectada la sesión de LinkedIn de Enrique con el SDR de The Coto Company.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnQBalvYkoX+3EEVqSVqADwocspbGpfL5F9BZNYH5+oNUeJPr2AbhilJWWZcGgQwc+vmZrNrVyTAhK+kFORw5RGnXZptA9vuf00QkeGlFAjnFAfxID7O81Vhlh8Fmy712+P+MApLH0htEujaIRga82EoP3rRIDgj8d4RVBwiBFWPLCAOXKgGgqP7O8OifV3rPLJjD+LBq6A+XMfhlWwTGn7Rqxa+p50FjqI0hx9jCCJb9/JV2fQ4dkMERmgJLtp/2V/J8I5UymXGFwuPLVEXZuhL+TbUUhuZlyQ9lmmEuvuvBUA0Ri0n/swMkhH8XmZJDxm7U69CfzMAffpkFxcUgPwIDAQAB",
   "permissions": ["cookies", "storage", "alarms", "tabs"],
   "host_permissions": ["https://*.linkedin.com/*", "https://linkedin-sdr.vercel.app/*"],

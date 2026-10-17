@@ -62,8 +62,8 @@ export default async function SettingsPage() {
         </p>
         <ActionForm action={saveLinkedInSession} className="mt-4 grid gap-4 md:grid-cols-2">
           <Field
-            label="Proxy residencial en España (muy recomendado)"
-            hint="Lo que hace WaLead: cada cuenta sale por un proxy residencial de su país, así LinkedIn ve una conexión desde España y no desde un centro de datos de EE. UU. Formato http://usuario:clave@host:puerto"
+            label="Proxy en España (obligatorio)"
+            hint="Lo que hace WaLead: cada cuenta sale por un proxy de su país. Usa uno ISP o residencial ESTÁTICO (misma IP siempre) en España, mejor de tu ciudad. Sin él LinkedIn cierra la sesión a los pocos minutos y el SDR no toca LinkedIn. Formato http://usuario:clave@host:puerto"
           >
             <input name="li_proxy" defaultValue={s.li_proxy ?? ""} className={input} />
           </Field>

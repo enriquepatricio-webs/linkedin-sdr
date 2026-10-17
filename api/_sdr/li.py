@@ -12,6 +12,7 @@ import re
 import uuid
 from typing import Dict, List, Optional, Tuple
 
+import requests
 from requests.cookies import RequestsCookieJar
 from open_linkedin_api import Linkedin
 from open_linkedin_api.utils.helpers import (
@@ -35,6 +36,37 @@ class LinkedInError(Exception):
 
 class SessionError(LinkedInError):
     """Las cookies ya no valen: hay que pegarlas de nuevo en Ajustes."""
+
+
+class ProxyRequired(LinkedInError):
+    """Sin proxy en España no se toca LinkedIn (ver PROXY_MSG)."""
+
+
+# Comprobado dos veces: la sesión funciona en la primera llamada desde Vercel (centro de datos de
+# EE. UU.) y LinkedIn la anula a los pocos minutos. WaLead lo evita con un proxy residencial del país
+# de cada cuenta; sin él cada intento quema la sesión y arriesga la cuenta.
+PROXY_MSG = (
+    "Falta el proxy en España (Ajustes → Sesión de LinkedIn). Sin él LinkedIn cierra la sesión a los pocos "
+    "minutos de usarla desde el servidor, así que el SDR no toca LinkedIn."
+)
+
+
+def proxy_url(settings: Dict) -> str:
+    return (settings.get("li_proxy") or os.environ.get("LINKEDIN_PROXY") or "").strip()
+
+
+def proxy_required(settings: Dict) -> bool:
+    return not proxy_url(settings) and os.environ.get("LINKEDIN_ALLOW_NO_PROXY") != "1"
+
+
+def proxy_info(proxy: str) -> Dict:
+    """Desde dónde ve LinkedIn la conexión: IP, ciudad, país y proveedor del proxy."""
+    try:
+        res = requests.get("https://ipinfo.io/json", proxies={"http": proxy, "https": proxy}, timeout=15)
+        data = res.json()
+    except Exception as e:  # noqa: BLE001 - cualquier fallo del proxy se muestra tal cual
+        raise LinkedInError(f"El proxy no responde: {str(e)[:200]}")
+    return {k: data.get(k) for k in ("ip", "city", "region", "country", "org")}
 
 
 COOKIE_NAME = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
@@ -65,7 +97,9 @@ def make_client(settings: Dict) -> Linkedin:
     jar.set("li_at", li_at, domain=".www.linkedin.com", path="/")
     jar.set("JSESSIONID", f'"{jsessionid}"', domain=".www.linkedin.com", path="/")
 
-    proxy = (settings.get("li_proxy") or os.environ.get("LINKEDIN_PROXY") or "").strip()
+    if proxy_required(settings):
+        raise ProxyRequired(PROXY_MSG)
+    proxy = proxy_url(settings)
     proxies = {"http": proxy, "https": proxy} if proxy else {}
 
     api = Linkedin("", "", cookies=jar, proxies=proxies)
@@ -82,6 +116,8 @@ def watch_cookies(api: Linkedin, on_change) -> None:
     session = api.client.session
 
     def hook(res, *args, **kwargs):
+        if not 200 <= res.status_code < 400:
+            return res  # un 401/403 trae cookies de visitante anónimo: no sustituyen a las buenas
         fresh = {c.name: c.value for c in res.cookies if c.domain.endswith("linkedin.com") and c.value}
         if fresh.get("JSESSIONID"):
             # El token CSRF tiene que seguir al JSESSIONID nuevo o las siguientes llamadas darían 403.
