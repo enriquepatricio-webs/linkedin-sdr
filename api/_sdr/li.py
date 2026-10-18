@@ -186,14 +186,15 @@ def _public_id(url: str) -> Optional[str]:
 
 
 def _search_params(campaign: Dict) -> Dict:
+    # Varios valores van separados por comas: con " | " LinkedIn devuelve 0 resultados sin avisar.
     filters = ["(key:resultType,value:List(PEOPLE))"]
     depths = [d for d in campaign.get("network_depths") or [] if d in ("F", "S", "O")]
     if depths:
-        filters.append(f"(key:network,value:List({' | '.join(depths)}))")
+        filters.append(f"(key:network,value:List({','.join(depths)}))")
     if campaign.get("search_regions"):
-        filters.append(f"(key:geoUrn,value:List({' | '.join(campaign['search_regions'])}))")
+        filters.append(f"(key:geoUrn,value:List({','.join(campaign['search_regions'])}))")
     if campaign.get("search_industries"):
-        filters.append(f"(key:industry,value:List({' | '.join(campaign['search_industries'])}))")
+        filters.append(f"(key:industry,value:List({','.join(campaign['search_industries'])}))")
     if _clean(campaign.get("search_title")):
         filters.append(f"(key:title,value:List({_clean(campaign['search_title'])}))")
     if _clean(campaign.get("search_company")):

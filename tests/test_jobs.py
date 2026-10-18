@@ -574,3 +574,10 @@ def test_api_network_error_is_not_500(monkeypatch):
     monkeypatch.setattr(index, "SDR", lambda: type("S", (), {"check_session": lambda self: boom()})())
     r = TestClient(index.app).post("/api/py/linkedin/check", headers={"x-api-key": "secreto"})
     assert r.status_code == 502 and "proxy" in r.json()["error"]
+
+
+def test_search_filters_use_commas():
+    f = li._search_params({"network_depths": ["S", "O"], "search_regions": ["105646813", "103644278"],
+                           "search_industries": ["4", "6"]})["filters"]
+    assert "(key:network,value:List(S,O))" in f and "(key:geoUrn,value:List(105646813,103644278))" in f
+    assert "(key:industry,value:List(4,6))" in f and " | " not in f
