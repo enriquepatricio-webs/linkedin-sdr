@@ -284,8 +284,10 @@ class SDR:
             summary.append({"campaign": c["name"], "found": len(people), "new": len(inserted)})
         return {"ok": True, "campaigns": summary}
 
-    def research(self, segment: Dict, sample: int = 5) -> Dict:
+    def research(self, segment: Dict, sample: int = 5, debug: bool = False) -> Dict:
         """Estudio de mercado: tamaño del segmento en LinkedIn y una muestra de perfiles."""
+        if debug:
+            return {"ok": True, "debug": li.search_debug(self.api, segment)}
         try:
             total = li.search_total(self.api, segment)
             people = li.search_people(self.api, segment, limit=sample, offset=0) if sample else []

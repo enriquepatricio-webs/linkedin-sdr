@@ -205,17 +205,28 @@ def _search_params(campaign: Dict) -> Dict:
     return params
 
 
-def search_total(api: Linkedin, campaign: Dict) -> Optional[int]:
-    """Número de resultados que LinkedIn dice tener para estos filtros (una sola petición)."""
+def _search_fetch(api: Linkedin, campaign: Dict):
     params = _search_params(campaign)
     keywords = f"keywords:{params['keywords']}," if params.get("keywords") else ""
-    res = api._fetch(
+    return api._fetch(
         f"/graphql?variables=(start:0,origin:GLOBAL_SEARCH_HEADER,"
         f"query:({keywords}flagshipSearchIntent:SEARCH_SRP,"
         f"queryParameters:{params['filters']},includeFiltersInResponse:false))"
         f"&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0"
     )
-    data = _json(res, "búsqueda")
+
+
+def search_debug(api: Linkedin, campaign: Dict) -> Dict:
+    """Respuesta en bruto de la búsqueda, para diagnosticar filtros que no devuelven nada."""
+    res = _search_fetch(api, campaign)
+    return {"status": res.status_code, "url": res.url[:600], "body": res.text[:3000]}
+
+
+def search_total(api: Linkedin, campaign: Dict) -> Optional[int]:
+    """Número de resultados que LinkedIn dice tener para estos filtros (una sola petición)."""
+    data = _json(_search_fetch(api, campaign), "búsqueda")
+    if data.get("errors"):
+        raise LinkedInError(f"LinkedIn rechazó la búsqueda: {str(data['errors'])[:300]}")
     clusters = (data.get("data") or {}).get("searchDashClustersByAll") or {}
     total = (clusters.get("metadata") or {}).get("totalResultCount")
     if total is None:
