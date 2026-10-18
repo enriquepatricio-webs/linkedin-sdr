@@ -376,6 +376,17 @@ class SDR:
 
     # ---------- 3. invitaciones ----------
 
+    def _fair_pick(self, ready: List[Dict]) -> List[Dict]:
+        """Reparte el cupo diario: el siguiente sale de la campaña que menos invitaciones lleva hoy
+        (y dentro de ella, el lead que lleva más tiempo esperando)."""
+        if not ready:
+            return []
+        sent = {}
+        for e in self.db.select("sdr_events", {"type": "eq.invite_sent", "created_at": f"gte.{self.day_start()}"},
+                                columns="campaign_id"):
+            sent[e.get("campaign_id")] = sent.get(e.get("campaign_id"), 0) + 1
+        return [min(ready, key=lambda lead: sent.get(lead.get("campaign_id"), 0))]
+
     def invite(self, force: bool = False, lead_id: Optional[str] = None) -> Dict:
         reason = self._guard(force or bool(lead_id))
         if reason:
@@ -391,7 +402,7 @@ class SDR:
         if lead_id:
             leads = self.db.select("sdr_leads", {"id": f"eq.{lead_id}", "status": _in(("to_invite", "invite_review"))})
         else:
-            leads = self.db.select("sdr_leads", {"status": "eq.to_invite"}, order="updated_at.asc", limit=1)
+            leads = self._fair_pick(self.db.select("sdr_leads", {"status": "eq.to_invite"}, order="updated_at.asc", limit=100))
         if not leads:
             return {"ok": True, "skipped": "no hay leads listos para invitar"}
         lead = leads[0]

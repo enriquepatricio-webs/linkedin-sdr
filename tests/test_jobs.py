@@ -581,3 +581,17 @@ def test_search_filters_use_commas():
                            "search_industries": ["4", "6"]})["filters"]
     assert "(key:network,value:List(S,O))" in f and "(key:geoUrn,value:List(105646813,103644278))" in f
     assert "(key:industry,value:List(4,6))" in f and " | " not in f
+
+
+def test_invites_rotate_between_campaigns(env):
+    db, fake = env
+    other = db.insert("sdr_campaigns", {"name": "Reformas", "status": "active", "send_connection_note": True})[0]
+    first = db.select("sdr_campaigns", {"name": "eq.CEOs Madrid"})[0]
+    for i, camp in enumerate([first, first, first, other]):
+        db.insert("sdr_leads", {"campaign_id": camp["id"], "urn_id": f"U{i}", "full_name": f"P{i}", "status": "to_invite",
+                                "connection_note": "hola", "updated_at": f"2026-01-0{i + 1}T00:00:00+00:00"})
+    s = sdr(db)
+    s.invite(force=True)
+    s.invite(force=True)
+    camps = [db.one("sdr_leads", {"urn_id": f"eq.{u}"})["campaign_id"] for u, _ in fake.invites]
+    assert camps == [first["id"], other["id"]]
