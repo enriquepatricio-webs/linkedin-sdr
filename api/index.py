@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import requests  # noqa: E402
 from fastapi import Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
@@ -44,6 +45,12 @@ def auth(
 @app.exception_handler(LinkedInError)
 async def _li_error(_, exc: LinkedInError):
     return JSONResponse(status_code=502, content={"ok": False, "error": str(exc)})
+
+
+@app.exception_handler(requests.RequestException)
+async def _net_error(_, exc: requests.RequestException):
+    # Proxy caído o mal configurado, timeouts...: mensaje claro en vez de un 500.
+    return JSONResponse(status_code=502, content={"ok": False, "error": f"Error de red o del proxy: {str(exc)[:300]}"})
 
 
 @app.exception_handler(DBError)

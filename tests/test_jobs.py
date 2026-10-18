@@ -550,3 +550,27 @@ def test_check_session_reports_proxy(env, monkeypatch):
     monkeypatch.setattr(li, "proxy_info", down)
     assert sdr(db).check_session()["error"] == "El proxy no responde"
     assert db.one("sdr_settings", {"id": "eq.1"})["li_session_status"] == "ok"
+
+
+def test_proxy_formats():
+    assert li.normalize_proxy("geo.iproyal.com:12321:user:pa:ss_country-es") == "http://user:pa:ss_country-es@geo.iproyal.com:12321"
+    assert li.normalize_proxy("u:p@1.2.3.4:80") == "http://u:p@1.2.3.4:80"
+    assert li.normalize_proxy("http://u:p@1.2.3.4:80") == "http://u:p@1.2.3.4:80"
+    assert li.normalize_proxy("1.2.3.4:80") == "http://1.2.3.4:80"
+    assert li.normalize_proxy("") == ""
+    with pytest.raises(li.LinkedInError):
+        li.normalize_proxy("basura")
+
+
+def test_api_network_error_is_not_500(monkeypatch):
+    monkeypatch.setenv("SDR_API_KEY", "secreto")
+    from fastapi.testclient import TestClient
+    import requests
+    import index
+
+    def boom():
+        raise requests.exceptions.ProxyError("proxy caído")
+
+    monkeypatch.setattr(index, "SDR", lambda: type("S", (), {"check_session": lambda self: boom()})())
+    r = TestClient(index.app).post("/api/py/linkedin/check", headers={"x-api-key": "secreto"})
+    assert r.status_code == 502 and "proxy" in r.json()["error"]

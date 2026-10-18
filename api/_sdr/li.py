@@ -51,8 +51,28 @@ PROXY_MSG = (
 )
 
 
+def normalize_proxy(raw: str) -> str:
+    """Acepta http://usuario:clave@host:puerto, usuario:clave@host:puerto o host:puerto:usuario:clave
+    (el formato en que lo dan IPRoyal y otros) y lo deja como URL."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if "://" in raw:
+        return raw
+    if "@" in raw:
+        return f"http://{raw}"
+    parts = raw.split(":")
+    if len(parts) >= 4 and parts[1].isdigit():
+        host, port, user = parts[0], parts[1], parts[2]
+        password = ":".join(parts[3:])
+        return f"http://{user}:{password}@{host}:{port}"
+    if len(parts) == 2 and parts[1].isdigit():
+        return f"http://{raw}"
+    raise LinkedInError("Formato de proxy no válido: usa http://usuario:clave@host:puerto o host:puerto:usuario:clave")
+
+
 def proxy_url(settings: Dict) -> str:
-    return (settings.get("li_proxy") or os.environ.get("LINKEDIN_PROXY") or "").strip()
+    return normalize_proxy(settings.get("li_proxy") or os.environ.get("LINKEDIN_PROXY") or "")
 
 
 def proxy_required(settings: Dict) -> bool:
