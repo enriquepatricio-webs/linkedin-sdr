@@ -173,7 +173,7 @@ export async function saveCampaign(_: ActionState, fd: FormData): Promise<Action
     icp_notes: str(fd, "icp_notes"),
     ai_instructions: str(fd, "ai_instructions"),
     send_connection_note: fd.get("send_connection_note") === "on",
-    first_message_delay_hours: int(fd, "first_message_delay_hours", 24),
+    first_message_delay_hours: int(fd, "first_message_delay_hours", 1),
     followup_delays_days: list(fd, "followup_delays_days")
       .map((x) => parseInt(x, 10))
       .filter((n) => Number.isFinite(n) && n > 0),

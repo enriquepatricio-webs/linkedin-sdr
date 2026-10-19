@@ -2,6 +2,7 @@
 devuelve sus resultados con save_qualification / save_draft / save_reply_analysis."""
 
 import random
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -11,6 +12,30 @@ from .db import DB, now_iso
 
 PIPELINE = ("new", "invite_review", "to_invite")
 LOCK_MINUTES = 20
+MAX_POST_AGE_DAYS = 7  # no se interactúa con publicaciones más antiguas
+
+# Arranques vacíos que la IA tiende a usar aunque el prompt los prohíba.
+_FILLER = re.compile(
+    r"^\s*(?:(?:totalmente|muy|completamente|absolutamente|bastante)\s+de\s+acuerdo|muy\s+cierto|"
+    r"gran(?:dísimo)?\s+(?:post|publicación|reflexión|aporte)|excelente(?:\s+(?:post|reflexión|aporte|publicación))?|"
+    r"buen(?:ísimo)?\s+(?:post|aporte)|(?:muy\s+)?interesante(?:\s+(?:post|reflexión|publicación))?|"
+    r"me\s+encanta(?:\s+(?:este|tu)\s+(?:post|enfoque))?|cuánta\s+razón|qué\s+gran\s+(?:reflexión|post))"
+    r"(?:,?\s*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?\s*[.,:;!¡-]*\s*",
+    re.IGNORECASE,
+)
+# Si un comentario vende, no sale solo: queda para que Enrique lo apruebe.
+_SELLING = re.compile(
+    r"\b(?:ayudamos|ayudo\s+a|nuestra\s+agencia|nuestros\s+servicios|the\s+coto|thecotocompany|"
+    r"podemos\s+ayudar|te\s+puedo\s+ayudar|escr[ií]beme|cont[aá]ctame|hablamos\s+por\s+privado)\b",
+    re.IGNORECASE,
+)
+
+
+def clean_comment(text: str) -> str:
+    text = _FILLER.sub("", (text or "").strip(), count=1).strip()
+    if len(text) < 25:
+        return ""
+    return text[0].upper() + text[1:]
 
 
 class JobError(Exception):
@@ -441,25 +466,32 @@ class SDR:
     # ---------- 4. aceptaciones ----------
 
     def check_connections(self, limit: int = 10, force: bool = False) -> Dict:
+        """Detecta invitaciones aceptadas. Primero con la lista de contactos recién añadidos (una sola
+        petición para todos); los que no salgan ahí se comprueban uno a uno cada 6 h."""
         reason = self._guard(force, need_hours=False)
         if reason:
             return {"ok": True, "skipped": reason}
+        try:
+            recent = li.recent_connections(self.api)
+        except li.SessionError as e:
+            return self._session_failed(e)
         recheck = _iso(_now() - timedelta(hours=6))
-        leads = self.db.select(
-            "sdr_leads",
-            {"status": "eq.invited", "or": f"(last_checked_at.is.null,last_checked_at.lt.{recheck})"},
-            order="last_checked_at.asc.nullsfirst",
-            limit=limit,
-        )
-        connected, expired = [], 0
-        for lead in leads:
-            try:
-                distance = li.network_distance(self.api, lead.get("public_id") or lead["urn_id"])
-            except li.SessionError as e:
-                return self._session_failed(e)
-            if distance == "DISTANCE_1":
+        invited = self.db.select("sdr_leads", {"status": "eq.invited"}, order="last_checked_at.asc.nullsfirst", limit=300)
+        connected, expired, checked = [], 0, 0
+        for lead in invited:
+            accepted = recent is not None and lead["urn_id"] in recent
+            if not accepted:
+                stale = not lead.get("last_checked_at") or lead["last_checked_at"] < recheck
+                if not stale or checked >= limit:
+                    continue
+                checked += 1
+                try:
+                    accepted = li.network_distance(self.api, lead.get("public_id") or lead["urn_id"]) == "DISTANCE_1"
+                except li.SessionError as e:
+                    return self._session_failed(e)
+            if accepted:
                 campaign = self.campaign(lead.get("campaign_id"))
-                delay = campaign.get("first_message_delay_hours", 24)
+                delay = campaign.get("first_message_delay_hours", 1)
                 self.db.update(
                     "sdr_leads",
                     {"id": f"eq.{lead['id']}"},
@@ -480,7 +512,8 @@ class SDR:
                 expired += 1
             else:
                 self.db.update("sdr_leads", {"id": f"eq.{lead['id']}"}, {"last_checked_at": now_iso()})
-        return {"ok": True, "checked": len(leads), "connected": connected, "expired": expired}
+        return {"ok": True, "invited": len(invited), "recent_list": recent is not None, "checked_one_by_one": checked,
+                "connected": connected, "expired": expired}
 
     # ---------- 5. mensajes y seguimientos (IA en n8n) ----------
 
@@ -740,8 +773,7 @@ class SDR:
                 limit=leads,
             )
             for lead in targets:
-                fresh = [p for p in li.profile_posts(self.api, lead["urn_id"], count=3)
-                         if (li.age_days(p["post_age"]) or 0) <= 21]
+                fresh = self._fresh_posts(li.profile_posts(self.api, lead["urn_id"], count=3))
                 if fresh:
                     rows = self.db.insert(
                         "sdr_engagements",
@@ -752,7 +784,7 @@ class SDR:
                 self.db.update("sdr_leads", {"id": f"eq.{lead['id']}"}, {"last_engaged_at": now_iso()})
             if feed:
                 me = (self.settings.get("li_profile") or {}).get("name")
-                posts = [p for p in li.feed_posts(self.api, limit=feed) if p["author_name"] != me]
+                posts = self._fresh_posts([p for p in li.feed_posts(self.api, limit=feed) if p["author_name"] != me])
                 if posts:
                     collected += len(self.db.insert(
                         "sdr_engagements", [{**p, "source": "feed"} for p in posts],
@@ -761,6 +793,7 @@ class SDR:
         except li.SessionError as e:
             return {**self._session_failed(e), "items": []}
 
+        self._expire_old_posts()
         pending = self.db.select(
             "sdr_engagements", {"status": "eq.new", "or": _unlocked()}, order="created_at.asc", limit=limit
         )
@@ -776,6 +809,41 @@ class SDR:
             self.log("posts_collected", f"{collected} publicaciones nuevas para revisar")
         return {"ok": True, "collected": collected, "items": items}
 
+    @staticmethod
+    def _fresh_posts(posts: List[Dict]) -> List[Dict]:
+        """Sólo publicaciones de los últimos 7 días con fecha fiable, con esa fecha anotada."""
+        limit = _now() - timedelta(days=MAX_POST_AGE_DAYS)
+        fresh = []
+        for p in posts:
+            created = li.post_created_at(p)
+            if created and created >= limit:
+                fresh.append({**p, "post_created_at": _iso(created)})
+        return fresh
+
+    @staticmethod
+    def _post_is_fresh(post: Dict) -> bool:
+        created = post.get("post_created_at")
+        if not created:
+            when = datetime.fromisoformat(post["created_at"]) if post.get("created_at") else None
+            created_dt = li.post_created_at(post, now=when)
+        else:
+            created_dt = datetime.fromisoformat(created)
+        return bool(created_dt) and created_dt >= _now() - timedelta(days=MAX_POST_AGE_DAYS)
+
+    def _expire_old_posts(self) -> int:
+        """Descarta lo que espera en cola y ya tiene más de 7 días (o fecha no fiable)."""
+        expired = 0
+        for post in self.db.select("sdr_engagements", {"status": _in(("new", "ready"))}, limit=500):
+            if not self._post_is_fresh(post):
+                self.db.update(
+                    "sdr_engagements", {"id": f"eq.{post['id']}"},
+                    {"status": "skipped", "reason": f"Publicación de más de {MAX_POST_AGE_DAYS} días o compartida",
+                     "comment_status": "none" if post.get("comment_status") != "posted" else "posted",
+                     "locked_until": None},
+                )
+                expired += 1
+        return expired
+
     def save_engagement(self, engagement_id: str, result: Dict) -> Dict:
         post = self.db.one("sdr_engagements", {"id": f"eq.{engagement_id}"})
         if not post:
@@ -785,14 +853,15 @@ class SDR:
         except (TypeError, ValueError):
             score = 0
         relevant = bool(result.get("relevant"))
-        comment = (result.get("comment") or "").strip()[:1200] if relevant else ""
+        comment = clean_comment((result.get("comment") or "")[:1200]) if relevant else ""
+        auto = self.settings.get("auto_comment") and not _SELLING.search(comment)
         values: Dict = {
             "relevance": score,
             "reason": (result.get("reason") or "")[:500],
             "locked_until": None,
             "want_like": relevant and bool(result.get("like")),
             "comment": comment,
-            "comment_status": ("approved" if self.settings.get("auto_comment") else "draft") if comment else "none",
+            "comment_status": ("approved" if auto else "draft") if comment else "none",
         }
         values["status"] = "ready" if (values["want_like"] or comment) else "skipped"
         self.db.update("sdr_engagements", {"id": f"eq.{engagement_id}"}, values)
@@ -809,8 +878,11 @@ class SDR:
         likes_left = s.get("daily_like_limit", 25) - self.count_events("post_liked", self.day_start())
         comments_left = s.get("daily_comment_limit", 8) - self.count_events("post_commented", self.day_start())
 
+        self._expire_old_posts()
         if engagement_id:
-            rows = self.db.select("sdr_engagements", {"id": f"eq.{engagement_id}"})
+            rows = [r for r in self.db.select("sdr_engagements", {"id": f"eq.{engagement_id}"}) if self._post_is_fresh(r)]
+            if not rows:
+                return {"ok": False, "error": f"Esa publicación tiene más de {MAX_POST_AGE_DAYS} días: no se interactúa"}
         else:
             # Los comentarios en borrador esperan aprobación: no deben tapar los me gusta pendientes.
             rows = [

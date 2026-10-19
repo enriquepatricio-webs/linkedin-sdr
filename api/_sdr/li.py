@@ -10,6 +10,7 @@ import json
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 import requests
@@ -379,6 +380,25 @@ def network_distance(api: Linkedin, profile_id: str) -> Optional[str]:
     return (data.get("distance") or {}).get("value")
 
 
+def recent_connections(api: Linkedin, count: int = 40) -> Optional[set]:
+    """Identificadores (ACoAA...) de los contactos añadidos más recientemente, en una sola petición.
+    None si LinkedIn no responde como se espera (entonces se comprueba lead a lead)."""
+    res = api._fetch(
+        "/relationships/dash/connections",
+        params={
+            "decorationId": "com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16",
+            "count": count,
+            "q": "search",
+            "sortType": "RECENTLY_ADDED",
+        },
+    )
+    if res.status_code in (401, 403):
+        raise SessionError("LinkedIn rechazó la sesión al leer los contactos recientes")
+    if res.status_code != 200:
+        return None
+    return set(re.findall(r"urn:li:fsd_profile:([A-Za-z0-9_-]+)", res.text))
+
+
 def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optional[str] = None) -> None:
     event = {
         "eventCreate": {
@@ -457,16 +477,60 @@ def conversation_events(api: Linkedin, conversation_id: str) -> List[Dict]:
 # ---------- publicaciones: leer, "me gusta" y comentar ----------
 
 _ACTIVITY = re.compile(r"urn:li:activity:(\d+)")
-_AGE = re.compile(r"(\d+)\s*(mo|yr|min|m|h|d|w|y|sem|mes|año|a)\b", re.IGNORECASE)
-_AGE_DAYS = {"min": 0, "m": 0, "h": 0, "d": 1, "w": 7, "sem": 7, "mo": 30, "mes": 30, "yr": 365, "y": 365, "año": 365, "a": 365}
+# "10 minutos", "2 horas", "3 días", "1 semana", "7 meses", "6 años" y también "3d", "2w", "1mo", "5h".
+_AGE = re.compile(
+    r"(\d+)\s*(minutos?|mins?|horas?|hrs?|d[ií]as?|semanas?|sem|meses|mes|años?|mo|yr|[mhdwya])(?![a-zñáéíóú])",
+    re.IGNORECASE,
+)
+
+
+def _unit_hours(unit: str) -> float:
+    u = unit.lower()
+    if u.startswith("mi") or u == "m":
+        return 1 / 60
+    if u.startswith("h"):
+        return 1
+    if u.startswith("d"):
+        return 24
+    if u.startswith("sem") or u == "w":
+        return 24 * 7
+    if u.startswith("mes") or u == "mo":
+        return 24 * 30
+    return 24 * 365  # año, a, y, yr
+
+
+def age_hours(label: str) -> Optional[float]:
+    """Antigüedad que muestra LinkedIn ('7 meses •', '3d') en horas; None si no se entiende."""
+    m = _AGE.search(label or "")
+    return int(m.group(1)) * _unit_hours(m.group(2)) if m else None
 
 
 def age_days(label: str) -> Optional[int]:
-    """'3d •', '2w', '1mo', '5h' -> días aproximados (None si no se entiende)."""
-    m = _AGE.search(label or "")
-    if not m:
+    h = age_hours(label)
+    return None if h is None else int(h // 24)
+
+
+def activity_time(urn: str) -> Optional[datetime]:
+    """Los identificadores de actividad llevan dentro la fecha de creación (los 41 bits altos, en ms)."""
+    m = _ACTIVITY.search(urn or "")
+    return datetime.fromtimestamp((int(m.group(1)) >> 22) / 1000, timezone.utc) if m else None
+
+
+def post_created_at(post: Dict, now: Optional[datetime] = None) -> Optional[datetime]:
+    """Fecha real de la publicación, o None si no es fiable (y entonces no se interactúa con ella).
+
+    En el feed, los compartidos y las agrupaciones traen un identificador nuevo aunque la
+    publicación sea antigua: dar me gusta a ese identificador falla. Se detecta porque su fecha
+    no cuadra con la antigüedad que muestra LinkedIn.
+    """
+    created = activity_time(post.get("post_urn") or "")
+    label = age_hours(post.get("post_age") or "")
+    if created is None or label is None:
         return None
-    return int(m.group(1)) * _AGE_DAYS[m.group(2).lower()]
+    urn_hours = ((now or datetime.now(timezone.utc)) - created).total_seconds() / 3600
+    if urn_hours < label * 0.75 - 0.25:
+        return None
+    return created
 
 
 def _text(node) -> str:

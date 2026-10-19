@@ -6,7 +6,7 @@
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone  # noqa: F401
 
 import pytest
 
@@ -103,11 +103,22 @@ class FakeDB:
 ME = "ACoAAME"
 
 
+def act(hours_ago: float) -> str:
+    """URN de actividad con la fecha real dentro, como los de LinkedIn."""
+    ms = int((datetime.now(timezone.utc) - timedelta(hours=hours_ago)).timestamp() * 1000)
+    return f"urn:li:activity:{ms << 22}"
+
+
+LEAD_FRESH, LEAD_OLD = act(48), act(24 * 90)
+FEED_FRESH, FEED_OWN, FEED_RESHARE = act(5), act(20), act(0.1)
+
+
 class FakeLinkedIn:
     def __init__(self):
         self.invites, self.sent = [], []
         self.likes, self.comments = [], []
         self.accepted = set()
+        self.recent = None  # lista de contactos recientes; None = LinkedIn no la da y se mira uno a uno
         self.inbox = {}
 
     def install(self, monkeypatch):
@@ -118,6 +129,7 @@ class FakeLinkedIn:
         monkeypatch.setattr(li, "get_profile", lambda api, pid, urn: {
             "public_id": pid, "headline": "CEO", "experience": [{"title": "CEO", "company": "Empresa", "period": "2020-actualidad"}]})
         monkeypatch.setattr(li, "invite", lambda api, urn, note: (self.invites.append((urn, note)) or True, "ok"))
+        monkeypatch.setattr(li, "recent_connections", lambda api: self.recent)
         monkeypatch.setattr(li, "network_distance", lambda api, pid: "DISTANCE_1" if pid in self.accepted else "DISTANCE_2")
         monkeypatch.setattr(li, "send_message", lambda api, urn, text, conv=None: self.sent.append((urn, text)))
         monkeypatch.setattr(li, "me", lambda api: {"urn_id": ME, "name": "Enrique"})
@@ -126,14 +138,18 @@ class FakeLinkedIn:
             for urn, evs in self.inbox.items()])
         monkeypatch.setattr(li, "conversation_events", lambda api, cid: self.inbox[cid[2:]])
         monkeypatch.setattr(li, "profile_posts", lambda api, urn, count=3: [
-            {"post_urn": f"urn:li:activity:{urn}1", "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
-             "post_text": "Hemos abierto nueva sede", "post_age": "2d •"},
-            {"post_urn": f"urn:li:activity:{urn}2", "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
-             "post_text": "Post antiguo", "post_age": "3mo •"}])
+            {"post_urn": LEAD_OLD, "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
+             "post_text": "Post antiguo", "post_age": "3 meses •"},
+            {"post_urn": LEAD_FRESH, "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
+             "post_text": "Hemos abierto nueva sede", "post_age": "2 días •"}] if urn == "ACoAA0" else [
+            {"post_urn": act(24 * 365 * 6), "post_url": "u", "author_name": "Otro", "author_headline": "",
+             "post_text": "Felices fiestas", "post_age": "6 años •"}])
         monkeypatch.setattr(li, "feed_posts", lambda api, limit=20: [
-            {"post_urn": "urn:li:activity:900", "post_url": "u", "author_name": "Otra", "author_headline": "",
-             "post_text": "Cómo captar clientes", "post_age": "5h"},
-            {"post_urn": "urn:li:activity:901", "post_url": "u", "author_name": "Enrique", "author_headline": "",
+            {"post_urn": FEED_FRESH, "post_url": "u", "author_name": "Otra", "author_headline": "",
+             "post_text": "Cómo captar clientes", "post_age": "5 horas •"},
+            {"post_urn": FEED_RESHARE, "post_url": "u", "author_name": "Compartido", "author_headline": "",
+             "post_text": "Compartido de hace días", "post_age": "3 días •"},
+            {"post_urn": FEED_OWN, "post_url": "u", "author_name": "Enrique", "author_headline": "",
              "post_text": "Mi propio post", "post_age": "1d"}])
         monkeypatch.setattr(li, "like_post", lambda api, urn: self.likes.append(urn))
         monkeypatch.setattr(li, "comment_post", lambda api, urn, text: self.comments.append((urn, text)))
@@ -190,8 +206,9 @@ def test_full_sequence(env):
 
     # Aceptación -> primer mensaje.
     fake.accepted.add(lead["public_id"])
-    assert sdr(db).check_connections()["checked"] == 0  # recién invitado: se revisa a las 6 h
-    db.update("sdr_leads", {"id": f"eq.{a['lead_id']}"}, {"last_checked_at": "2020-01-01T00:00:00+00:00"})
+    r = sdr(db).check_connections()
+    assert r["checked_one_by_one"] == 0 and r["connected"] == []  # sin lista reciente: uno a uno cada 6 h
+    fake.recent = {lead["urn_id"]}  # con la lista de contactos recientes se detecta al momento
     assert sdr(db).check_connections()["connected"] == ["Persona 0"]
     due = sdr(db).due_messages()
     assert [i["kind"] for i in due["items"]] == ["first_message"]
@@ -346,7 +363,7 @@ def test_engagement_flow(env):
 
     batch = sdr(db).engage_batch(leads=4, feed=10, limit=10)
     urns = {r["post_urn"] for r in db.t["sdr_engagements"]}
-    assert urns == {"urn:li:activity:ACoAA01", "urn:li:activity:900"}  # sin posts viejos ni propios
+    assert urns == {LEAD_FRESH, FEED_FRESH}  # sin posts de más de 7 días, compartidos ni propios
     assert len(batch["items"]) == 2 and "{" not in batch["items"][0]["system_prompt"]
     assert sdr(db).engage_batch(leads=4, feed=0)["items"] == []  # bloqueados mientras la IA decide
 
@@ -358,15 +375,15 @@ def test_engagement_flow(env):
 
     r = sdr(db).engage_run()
     assert r["liked"] == 1 and r["commented"] == 0  # el comentario espera aprobación
-    assert fake.likes == ["urn:li:activity:ACoAA01"]
+    assert fake.likes == [LEAD_FRESH]
     assert db.one("sdr_engagements", {"id": f"eq.{lead_post['id']}"})["status"] == "ready"
 
     db.update("sdr_engagements", {"id": f"eq.{lead_post['id']}"}, {"comment_status": "approved"})
     r = sdr(db).engage_run()
-    assert r["commented"] == 1 and fake.comments == [("urn:li:activity:ACoAA01", "Enhorabuena por la nueva sede")]
+    assert r["commented"] == 1 and fake.comments == [(LEAD_FRESH, "Enhorabuena por la nueva sede")]
     row = db.one("sdr_engagements", {"id": f"eq.{lead_post['id']}"})
     assert row["status"] == "done" and row["comment_status"] == "posted"
-    assert fake.likes == ["urn:li:activity:ACoAA01"]  # no repite el me gusta
+    assert fake.likes == [LEAD_FRESH]  # no repite el me gusta
 
     db.update("sdr_settings", {"id": "eq.1"}, {"engagement_enabled": False})
     assert sdr(db).engage_run()["skipped"] == "interacción con publicaciones desactivada"
@@ -375,6 +392,14 @@ def test_engagement_flow(env):
 def test_age_and_profile_posts():
     assert li.age_days("3d •") == 3 and li.age_days("2w • Edited") == 14 and li.age_days("1mo") == 30
     assert li.age_days("5h") == 0 and li.age_days("") is None
+    # LinkedIn en español: antes no se entendía y contaba como 0 días.
+    assert li.age_days("7 meses •   ") == 210 and li.age_days("6 años •") == 2190 and li.age_days("1 semana •") == 7
+    assert li.age_days("3 días • Editado •") == 3 and li.age_hours("10 minutos •") == 10 / 60 and li.age_hours("2 horas") == 2
+    # La fecha real va dentro del identificador; si no cuadra con la etiqueta es un compartido.
+    assert li.post_created_at({"post_urn": act(48), "post_age": "2 días •"})
+    assert li.post_created_at({"post_urn": act(0.1), "post_age": "1 día •"}) is None
+    assert li.post_created_at({"post_urn": act(0.2), "post_age": "10 minutos •"})
+    assert li.post_created_at({"post_urn": act(5), "post_age": ""}) is None
 
     class Api:
         def get_profile_posts(self, urn_id, post_count):
@@ -474,6 +499,28 @@ def test_extension_zip_is_up_to_date():
         with open(os.path.join(root, "extension", name), "rb") as f:
             files[name] = f.read()
     assert packed == files, "Ejecuta scripts/pack-extension.sh"
+
+
+def test_comment_cleanup_and_old_queue(env):
+    db, _ = env
+    assert jobs_mod.clean_comment("Totalmente de acuerdo. En nuestra experiencia tratar bien al cliente trae referencias.") == \
+        "En nuestra experiencia tratar bien al cliente trae referencias."
+    assert jobs_mod.clean_comment("Muy cierto, Francisco. la presión por cerrar lleva a malas decisiones.") == \
+        "La presión por cerrar lleva a malas decisiones."
+    assert jobs_mod.clean_comment("Gran post!") == ""
+
+    db.update("sdr_settings", {"id": "eq.1"}, {"auto_comment": True})
+    fresh = db.insert("sdr_engagements", {"post_urn": act(3), "post_age": "3 horas", "author_name": "A", "post_text": "x"})[0]
+    selling = db.insert("sdr_engagements", {"post_urn": act(4), "post_age": "4 horas", "author_name": "B", "post_text": "x"})[0]
+    old = db.insert("sdr_engagements", {"post_urn": act(24 * 90), "post_age": "3 meses", "author_name": "C",
+                                        "post_text": "x", "status": "ready", "want_like": True})[0]
+    s = sdr(db)
+    assert s.save_engagement(fresh["id"], {"relevant": True, "like": True, "comment": "Muy cierto. Medir hasta la venta cambia las decisiones."})["comment_status"] == "approved"
+    assert s.save_engagement(selling["id"], {"relevant": True, "like": True, "comment": "Justo ayudamos a empresas de servicios con esto mismo."})["comment_status"] == "draft"
+    assert db.one("sdr_engagements", {"id": f"eq.{fresh['id']}"})["comment"] == "Medir hasta la venta cambia las decisiones."
+    s.engage_run(force=True)
+    assert db.one("sdr_engagements", {"id": f"eq.{old['id']}"})["status"] == "skipped"
+    assert "error" in sdr(db).engage_run(engagement_id=old["id"])
 
 
 def test_server_keeps_rotated_cookies(env):

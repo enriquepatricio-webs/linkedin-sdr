@@ -109,7 +109,7 @@ export function CampaignForm({ campaign }: { campaign: Partial<Campaign> }) {
         </label>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Primer mensaje tras aceptar (horas)">
-            <input name="first_message_delay_hours" type="number" min={0} defaultValue={campaign.first_message_delay_hours ?? 24} className={input} />
+            <input name="first_message_delay_hours" type="number" min={0} defaultValue={campaign.first_message_delay_hours ?? 1} className={input} />
           </Field>
           <Field label="Seguimientos (días entre mensajes)" hint="Ej.: 4, 7 = seguimiento a los 4 días y otro 7 días después. Vacío = sin seguimientos">
             <input name="followup_delays_days" defaultValue={(campaign.followup_delays_days ?? [4, 7]).join(", ")} className={input} />

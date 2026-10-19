@@ -178,9 +178,11 @@ def engagement(s: Dict, post: Dict, lead: Dict) -> Dict[str, str]:
             f"Temas de interés: {s.get('engagement_topics') or '-'}",
             who,
             "El comentario solo se escribe si puedes aportar algo de verdad: una experiencia, un matiz o una pregunta "
-            "concreta sobre lo que dice el post. Entre 1 y 3 frases, en el idioma del post, de tú, sin vender, "
-            "sin mencionar a The Coto Company, sin enlaces, sin hashtags ni emojis, y nada de frases vacías como "
-            "'Gran post' o 'Totalmente de acuerdo'. Si no hay nada valioso que decir, deja el comentario vacío.",
+            "concreta sobre lo que dice el post. Entre 1 y 3 frases, en el idioma del post, de tú, sin enlaces, "
+            "sin hashtags ni emojis. Empieza directamente por la idea: nunca con 'Totalmente de acuerdo', "
+            "'Muy cierto', 'Gran post', 'Interesante' ni nada parecido. No vendas: no digas a qué nos dedicamos, "
+            "no ofrezcas ayuda ni menciones a The Coto Company. Si no hay nada valioso que decir, deja el "
+            "comentario vacío.",
             "Responde SOLO con un objeto JSON válido con estas claves: "
             "relevant (true o false), score (0 a 100, interés de la publicación para nosotros), "
             "like (true o false), comment (texto del comentario o cadena vacía), reason (una frase).",
