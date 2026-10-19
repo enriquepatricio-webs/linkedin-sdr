@@ -224,6 +224,12 @@ def check_connections(body: Run = Run()):
     return SDR().check_connections(limit=min(body.limit, 25), force=body.force)
 
 
+@app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])
+def check_connections_now():
+    """Lo mismo por GET, para lanzarlo a mano desde el navegador."""
+    return SDR().check_connections(limit=10, force=True)
+
+
 @app.post("/api/py/jobs/due-messages", dependencies=[Depends(auth)])
 def due_messages(body: Run = Run()):
     return SDR().due_messages(limit=min(body.limit, 10), force=body.force)
