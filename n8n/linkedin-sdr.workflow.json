@@ -287,12 +287,12 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "5 8-20/2 * * *"
+              "expression": "5,35 8-20 * * *"
             }
           ]
         }
       },
-      "name": "Cada 2 h (aceptaciones)",
+      "name": "Cada 30 min (aceptaciones)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -793,7 +793,7 @@
         ]
       ]
     },
-    "Cada 2 h (aceptaciones)": {
+    "Cada 30 min (aceptaciones)": {
       "main": [
         [
           {

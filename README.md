@@ -91,7 +91,7 @@ importarlo en otra instancia.
 | Buscar leads | 8:20 y 13:20, L-V |
 | Cualificar (DeepSeek) | cada 30 min |
 | Invitar | cada 15 min, 8-20 h L-V (el horario real lo fija Ajustes) |
-| Comprobar aceptaciones | cada 2 h |
+| Comprobar aceptaciones (lista de contactos recientes) | cada 30 min |
 | Redactar mensajes (DeepSeek) | cada 30 min L-V |
 | Enviar cola | cada 12 min L-V |
 | Leer bandeja (DeepSeek) | cada 15 min |
