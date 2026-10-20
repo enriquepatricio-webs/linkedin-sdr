@@ -674,3 +674,37 @@ def test_send_message_uses_messenger():
     Res.status_code = 500
     with pytest.raises(li.LinkedInError):
         li.send_message(api, "ACoAAX", "Hola", None, me_urn_id="ACoAAME")
+
+
+def test_feed_uses_post_thread_not_feed_event():
+    post_id, event_id = act(30)[16:], act(0.1)[16:]
+
+    class Res:
+        status_code = 200
+        url = "x"
+        headers = {}
+
+        def json(self):
+            return {
+                "data": {"*elements": ["upd1", "upd2", "upd3"]},
+                "included": [
+                    {"$type": "com.linkedin.voyager.feed.render.UpdateV2", "entityUrn": "upd1",
+                     "updateMetadata": {"urn": f"urn:li:activity:{event_id}"},
+                     "*socialDetail": f"urn:li:fs_socialDetail:urn:li:activity:{post_id}",
+                     "actor": {"name": {"text": "Ana"}, "description": {"text": "CEO"}, "subDescription": {"text": "1 día •"}},
+                     "commentary": {"text": {"text": "Abrimos sede"}}},
+                    {"$type": "com.linkedin.voyager.feed.render.UpdateV2", "entityUrn": "upd2",
+                     "updateMetadata": {"urn": "urn:li:activity:5"}, "actor": {"subDescription": {"text": "Promocionado"}},
+                     "commentary": {"text": {"text": "Anuncio"}}},
+                    {"$type": "com.linkedin.voyager.feed.render.UpdateV2", "entityUrn": "upd3", "resharedUpdate": "x",
+                     "updateMetadata": {"urn": "urn:li:activity:6"}, "commentary": {"text": {"text": "Compartido"}}},
+                ],
+            }
+
+    class Api:
+        def _fetch(self, *a, **k):
+            return Res()
+
+    posts = li.feed_posts(Api(), limit=5)
+    assert [p["post_urn"] for p in posts] == [f"urn:li:activity:{post_id}"]
+    assert li.post_created_at(posts[0])  # la fecha del hilo cuadra con "1 día"

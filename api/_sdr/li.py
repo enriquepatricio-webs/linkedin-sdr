@@ -614,8 +614,7 @@ def profile_posts(api: Linkedin, urn_id: str, count: int = 3) -> List[Dict]:
     for el in raw or []:
         if not el or "resharedUpdate" in el:
             continue
-        urn = (el.get("updateMetadata") or {}).get("urn") or ""
-        m = _ACTIVITY.search(urn) or _ACTIVITY.search(json.dumps(el)[:4000])
+        m = _thread(el)
         if not m:
             continue
         actor = el.get("actor") or {}
@@ -633,27 +632,52 @@ def profile_posts(api: Linkedin, urn_id: str, count: int = 3) -> List[Dict]:
     return posts
 
 
+def _thread(update: Dict):
+    """Actividad de la publicación en sí (la de su hilo de comentarios y reacciones).
+
+    En el feed, updateMetadata.urn es el evento que la trae ("X ha comentado esto") y no admite
+    me gusta ni comentarios: hay que usar la del socialDetail, que además lleva la fecha real."""
+    social = update.get("*socialDetail") or update.get("socialDetail") or ""
+    if isinstance(social, dict):
+        social = social.get("urn") or social.get("entityUrn") or social.get("threadId") or json.dumps(social)[:2000]
+    m = _ACTIVITY.search(str(social))
+    if m:
+        return m
+    urn = (update.get("updateMetadata") or {}).get("urn") or ""
+    return _ACTIVITY.search(urn) or _ACTIVITY.search(json.dumps(update)[:4000])
+
+
+_PROMOTED = re.compile(r"promocionad|promoted|patrocinad|sponsored", re.IGNORECASE)
+
+
 def feed_posts(api: Linkedin, limit: int = 20) -> List[Dict]:
-    """Publicaciones recientes del feed de Enrique (sin promocionadas)."""
-    try:
-        raw = api.get_feed_posts(limit=limit)
-    except ValueError:
-        raise SessionError("El feed no devolvió JSON: probablemente la sesión ha caducado")
-    except (KeyError, TypeError, IndexError):
-        return []
-    posts = []
-    for p in raw or []:
-        m = _ACTIVITY.search(p.get("url") or "")
-        if not m or not (p.get("content") or "").strip():
+    """Publicaciones recientes del feed de Enrique, sin promocionadas ni compartidos."""
+    res = api._fetch(
+        "/feed/updatesV2", params={"count": limit, "q": "chronFeed", "start": 0},
+        headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+    )
+    data = _json(res, "feed")
+    updates = {i.get("entityUrn"): i for i in data.get("included") or [] if "UpdateV2" in str(i.get("$type"))}
+    posts, seen = [], set()
+    for key in (data.get("data") or {}).get("*elements") or []:
+        u = updates.get(key)
+        if not u or u.get("resharedUpdate") or u.get("*resharedUpdate"):
             continue
+        actor = u.get("actor") or {}
+        age = _text(actor.get("subDescription"))
+        text = _text(u.get("commentary"))
+        m = _thread(u)
+        if not m or not text.strip() or _PROMOTED.search(age) or m.group(1) in seen:
+            continue
+        seen.add(m.group(1))
         posts.append(
             {
                 "post_urn": f"urn:li:activity:{m.group(1)}",
                 "post_url": f"https://www.linkedin.com/feed/update/urn:li:activity:{m.group(1)}/",
-                "author_name": p.get("author_name") or "",
-                "author_headline": "",
-                "post_text": p["content"][:3000],
-                "post_age": p.get("old") or "",
+                "author_name": _text(actor.get("name")),
+                "author_headline": _text(actor.get("description")),
+                "post_text": text[:3000],
+                "post_age": age,
             }
         )
     return posts
