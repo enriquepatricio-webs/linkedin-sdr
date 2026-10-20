@@ -399,38 +399,44 @@ def recent_connections(api: Linkedin, count: int = 40) -> Optional[set]:
     return set(re.findall(r"urn:li:fsd_profile:([A-Za-z0-9_-]+)", res.text))
 
 
-def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optional[str] = None) -> None:
-    event = {
-        "eventCreate": {
-            "originToken": str(uuid.uuid4()),
-            "value": {
-                "com.linkedin.voyager.messaging.create.MessageCreate": {
-                    "attributedBody": {"text": text, "attributes": []},
-                    "attachments": [],
-                }
-            },
-            "trackingId": generate_trackingId_as_charString(),
-        },
+def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optional[str] = None,
+                 me_urn_id: Optional[str] = None) -> None:
+    """Envía un mensaje con la mensajería actual de LinkedIn (Messenger). La antigua
+    (/messaging/conversations) devuelve 500 desde 2026."""
+    if not me_urn_id:
+        me_urn_id = me(api)["urn_id"]
+    message = {
+        "body": {"attributes": [], "text": text},
+        "renderContentUnions": [],
+        "originToken": str(uuid.uuid4()),
+    }
+    payload = {
+        "message": message,
+        "mailboxUrn": f"urn:li:fsd_profile:{me_urn_id}",
+        "trackingId": generate_trackingId_as_charString(),
         "dedupeByClientGeneratedToken": False,
     }
-    if conversation_id:
-        res = api._post(
-            f"/messaging/conversations/{conversation_id}/events",
-            params={"action": "create"},
-            data=json.dumps(event),
-        )
+    if conversation_id and conversation_id.startswith("2-"):
+        message["conversationUrn"] = f"urn:li:msg_conversation:(urn:li:fsd_profile:{me_urn_id},{conversation_id})"
     else:
-        event["recipients"] = [urn_id]
-        event["subtype"] = "MEMBER_TO_MEMBER"
-        res = api._post(
-            "/messaging/conversations",
-            params={"action": "create"},
-            data=json.dumps({"keyVersion": "LEGACY_INBOX", "conversationCreate": event}),
-        )
+        # Con el destinatario LinkedIn usa la conversación 1:1 que ya exista (la de la nota de invitación).
+        payload["hostRecipientUrns"] = [f"urn:li:fsd_profile:{urn_id}"]
+    res = api._post(
+        "/voyagerMessagingDashMessengerMessages",
+        params={"action": "createMessage"},
+        data=json.dumps(payload),
+        headers={"accept": "application/json", "content-type": "text/plain;charset=UTF-8"},
+    )
     if res.status_code in (401, 403):
         raise SessionError("LinkedIn rechazó la sesión al enviar el mensaje")
     if res.status_code not in (200, 201):
-        raise LinkedInError(f"No se pudo enviar ({res.status_code}): {res.text[:300]}")
+        raise LinkedInError(f"No se pudo enviar ({res.status_code}): {res.text[:200]}")
+
+
+def inbox_debug(api: Linkedin) -> Dict:
+    """Qué responde LinkedIn a la lectura de la bandeja (para diagnosticar)."""
+    res = api._fetch("/messaging/conversations", params={"keyVersion": "LEGACY_INBOX"})
+    return {"legacy_status": res.status_code, "legacy_body": res.text[:600]}
 
 
 def _member_urn_id(member: Dict) -> Optional[str]:

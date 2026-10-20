@@ -597,7 +597,8 @@ class SDR:
                 results.append({"message_id": m["id"], "cancelled": True})
                 continue
             try:
-                li.send_message(self.api, lead["urn_id"], m["body"], lead.get("conversation_urn_id"))
+                li.send_message(self.api, lead["urn_id"], m["body"], lead.get("conversation_urn_id"),
+                                me_urn_id=(self.settings.get("li_profile") or {}).get("urn_id"))
             except li.SessionError as e:
                 return self._session_failed(e)
             except li.LinkedInError as e:

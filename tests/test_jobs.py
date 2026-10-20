@@ -131,7 +131,7 @@ class FakeLinkedIn:
         monkeypatch.setattr(li, "invite", lambda api, urn, note: (self.invites.append((urn, note)) or True, "ok"))
         monkeypatch.setattr(li, "recent_connections", lambda api: self.recent)
         monkeypatch.setattr(li, "network_distance", lambda api, pid: "DISTANCE_1" if pid in self.accepted else "DISTANCE_2")
-        monkeypatch.setattr(li, "send_message", lambda api, urn, text, conv=None: self.sent.append((urn, text)))
+        monkeypatch.setattr(li, "send_message", lambda api, urn, text, conv=None, me_urn_id=None: self.sent.append((urn, text)))
         monkeypatch.setattr(li, "me", lambda api: {"urn_id": ME, "name": "Enrique"})
         monkeypatch.setattr(li, "conversations", lambda api: [
             {"id": f"2-{urn}", "last_activity_ms": max(e["created_ms"] for e in evs), "participants": [ME, urn]}
@@ -642,3 +642,35 @@ def test_invites_rotate_between_campaigns(env):
     s.invite(force=True)
     camps = [db.one("sdr_leads", {"urn_id": f"eq.{u}"})["campaign_id"] for u, _ in fake.invites]
     assert camps == [first["id"], other["id"]]
+
+
+def test_send_message_uses_messenger():
+    import json as _json
+
+    class Res:
+        status_code = 200
+        text = "{}"
+
+    class Api:
+        calls = []
+
+        def _post(self, uri, **kw):
+            self.calls.append((uri, kw))
+            return Res()
+
+    api = Api()
+    li.send_message(api, "ACoAAX", "Hola", None, me_urn_id="ACoAAME")
+    uri, kw = api.calls[-1]
+    body = _json.loads(kw["data"])
+    assert uri == "/voyagerMessagingDashMessengerMessages" and kw["params"] == {"action": "createMessage"}
+    assert body["mailboxUrn"] == "urn:li:fsd_profile:ACoAAME" and body["hostRecipientUrns"] == ["urn:li:fsd_profile:ACoAAX"]
+    assert body["message"]["body"]["text"] == "Hola"
+
+    li.send_message(api, "ACoAAX", "Otra", "2-abc==", me_urn_id="ACoAAME")
+    body = _json.loads(api.calls[-1][1]["data"])
+    assert body["message"]["conversationUrn"] == "urn:li:msg_conversation:(urn:li:fsd_profile:ACoAAME,2-abc==)"
+    assert "hostRecipientUrns" not in body
+
+    Res.status_code = 500
+    with pytest.raises(li.LinkedInError):
+        li.send_message(api, "ACoAAX", "Hola", None, me_urn_id="ACoAAME")
