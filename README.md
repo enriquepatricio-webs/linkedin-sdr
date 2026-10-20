@@ -98,6 +98,23 @@ importarlo en otra instancia.
 | Recoger publicaciones (DeepSeek) | cada 2 h, 9-19 h L-V |
 | Me gusta y comentarios | cada 20 min, 9-19 h L-V |
 
+## API interna de LinkedIn: lo que ha cambiado (oct 2026)
+
+La librería `open-linkedin-api` usa endpoints que LinkedIn ya no admite; `api/_sdr/li.py` los sustituye:
+
+| Qué | Antes (falla) | Ahora |
+| --- | --- | --- |
+| Enviar mensaje | `/messaging/conversations` → 500 | `voyagerMessagingDashMessengerMessages?action=createMessage` |
+| Leer bandeja | `/messaging/conversations` → 500 | GraphQL `messengerConversations` + `messengerMessages` |
+| Filtros de búsqueda | valores con `" \| "` → 0 resultados | valores separados por comas; cargo con ≤ 5 términos |
+| Me gusta y comentarios | actividad del evento del feed → 400 | actividad del `socialDetail` (la publicación en sí) |
+| Aceptaciones | `networkinfo` lead a lead | lista de contactos recientes (`RECENTLY_ADDED`) |
+
+Los identificadores de las consultas GraphQL (`queryId`) cambian cuando LinkedIn publica una versión nueva de su
+web. Si la bandeja empieza a fallar con un error de validación, hay que buscar los actuales en el código de
+`https://www.linkedin.com/messaging/` (`messengerConversations.<hash>` y `messengerMessages.<hash>`) y
+actualizar `_CONVERSATIONS_QUERY` y `_MESSAGES_QUERY`.
+
 ## Seguridad de la cuenta
 
 - Límites por defecto: 15 invitaciones/día, 80/semana, 30 mensajes/día, L-V de 9 a 19 h (Europe/Madrid).
