@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 import requests
+from urllib.parse import quote
 from requests.cookies import RequestsCookieJar
 from open_linkedin_api import Linkedin
 from open_linkedin_api.utils.helpers import (
@@ -454,6 +455,37 @@ def feed_debug(api: Linkedin, count: int = 4) -> Dict:
     socials = [{k: v for k, v in i.items() if k in ("entityUrn", "threadId", "urn", "$type", "dashEntityUrn")}
                for i in data.get("included") or [] if "SocialDetail" in str(i.get("$type"))][:6]
     return {"status": res.status_code, "elements": (data.get("data") or {}).get("*elements"), "updates": items, "socials": socials}
+
+
+_MSG_QUERY = re.compile(r"(messenger(?:Conversations|Messages)[A-Za-z]*\.[0-9a-f]{32})")
+
+
+def discover_messenger_query_ids(api: Linkedin, max_scripts: int = 60) -> List[str]:
+    """Busca los identificadores de las consultas de mensajería en el código de la web de LinkedIn."""
+    page = api.client.session.get("https://www.linkedin.com/messaging/", timeout=30)
+    found = set(_MSG_QUERY.findall(page.text))
+    scripts = re.findall(r'src="(https://static\.licdn\.com/[^"]+)"', page.text)
+    for url in scripts[:max_scripts]:
+        try:
+            js = requests.get(url, timeout=20, headers={"user-agent": api.client.session.headers.get("user-agent", "")})
+        except requests.RequestException:
+            continue
+        found.update(_MSG_QUERY.findall(js.text))
+    return sorted(found)
+
+
+def messenger_debug(api: Linkedin, me_urn_id: str) -> Dict:
+    mailbox = quote(f"urn:li:fsd_profile:{me_urn_id}", safe="")
+    out = {"tried": {}}
+    for qid in ["messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"]:
+        res = api._fetch(f"/voyagerMessagingGraphQL/graphql?queryId={qid}&variables=(mailboxUrn:{mailbox})",
+                         headers={"accept": "application/graphql"})
+        out["tried"][qid] = {"status": res.status_code, "body": res.text[:400]}
+    try:
+        out["discovered"] = discover_messenger_query_ids(api)
+    except Exception as e:  # noqa: BLE001
+        out["discovered_error"] = str(e)[:300]
+    return out
 
 
 def inbox_debug(api: Linkedin) -> Dict:

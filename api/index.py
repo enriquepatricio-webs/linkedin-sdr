@@ -20,6 +20,7 @@ from _sdr.jobs import SDR, JobError  # noqa: E402
 from _sdr.li import LinkedInError  # noqa: E402
 from _sdr.li import feed_debug as li_feed_debug  # noqa: E402
 from _sdr.li import inbox_debug as li_inbox_debug  # noqa: E402
+from _sdr.li import messenger_debug as li_messenger_debug  # noqa: E402
 
 app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
@@ -234,6 +235,12 @@ def inbox_debug():
 @app.get("/api/py/linkedin/feed-debug", dependencies=[Depends(auth)])
 def feed_debug(count: int = 4):
     return {"ok": True, **li_feed_debug(SDR().api, count=max(1, min(count, 10)))}
+
+
+@app.get("/api/py/linkedin/messenger-debug", dependencies=[Depends(auth)])
+def messenger_debug():
+    sdr = SDR()
+    return {"ok": True, **li_messenger_debug(sdr.api, (sdr.settings.get("li_profile") or {}).get("urn_id"))}
 
 
 @app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])
