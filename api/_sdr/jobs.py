@@ -629,7 +629,7 @@ class SDR:
         try:
             if not me:
                 me = li.me(self.api)["urn_id"]
-            convs = li.conversations(self.api)
+            convs = li.conversations(self.api, me)
         except li.SessionError as e:
             return {**self._session_failed(e), "items": []}
 
@@ -646,10 +646,10 @@ class SDR:
                 continue
             last_sync = lead.get("inbox_synced_at")
             activity = datetime.fromtimestamp(conv["last_activity_ms"] / 1000, tz=timezone.utc)
-            if last_sync and activity <= datetime.fromisoformat(last_sync):
+            if last_sync and conv["last_activity_ms"] and activity <= datetime.fromisoformat(last_sync):
                 continue
             try:
-                events = li.conversation_events(self.api, conv["id"])
+                events = li.conversation_events(self.api, conv["id"], me)
             except li.SessionError as e:
                 return {**self._session_failed(e), "items": items}
             new_inbound = self._store_events(lead, events, me)
@@ -717,7 +717,10 @@ class SDR:
                  "created_at": created, "sent_at": created, "linkedin_event_urn": ev["urn"]},
                 on_conflict="linkedin_event_urn", ignore_duplicates=True,
             )
-            new_inbound.extend(rows)
+            # Lo anterior a la campaña queda como historial, pero no es una respuesta.
+            since = lead.get("invited_at") or lead.get("created_at")
+            if not since or ev["created_ms"] / 1000 >= datetime.fromisoformat(since).timestamp() - 60:
+                new_inbound.extend(rows)
         return new_inbound
 
     def save_reply_analysis(self, lead_id: str, result: Dict) -> Dict:

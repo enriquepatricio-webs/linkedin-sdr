@@ -434,111 +434,64 @@ def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optiona
         raise LinkedInError(f"No se pudo enviar ({res.status_code}): {res.text[:200]}")
 
 
-def feed_debug(api: Linkedin, count: int = 4) -> Dict:
-    """Estructura en bruto de las primeras publicaciones del feed (para diagnosticar los me gusta)."""
-    res = api._fetch(
-        "/feed/updatesV2", params={"count": count, "q": "chronFeed", "start": 0},
-        headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+_CONVERSATIONS_QUERY = "messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
+_MESSAGES_QUERY = "messengerMessages.5846eeb71c981f11e0134cb6626cc314"
+
+
+def _graphql(api: Linkedin, query_id: str, variables: str, what: str) -> Dict:
+    data = _json(
+        api._fetch(f"/voyagerMessagingGraphQL/graphql?queryId={query_id}&variables={variables}",
+                   headers={"accept": "application/graphql"}),
+        what,
     )
-    data = res.json()
-    items = []
-    for i in data.get("included") or []:
-        if "UpdateV2" not in str(i.get("$type")):
-            continue
-        items.append({
-            "entityUrn": i.get("entityUrn"),
-            "updateMetadata": i.get("updateMetadata"),
-            "socialDetail": i.get("*socialDetail") or i.get("socialDetail"),
-            "keys": sorted(i.keys()),
-            "urns": sorted(set(re.findall(r"urn:li:(?:ugcPost|share|activity):\d+", json.dumps(i))))[:10],
-        })
-    socials = [{k: v for k, v in i.items() if k in ("entityUrn", "threadId", "urn", "$type", "dashEntityUrn")}
-               for i in data.get("included") or [] if "SocialDetail" in str(i.get("$type"))][:6]
-    return {"status": res.status_code, "elements": (data.get("data") or {}).get("*elements"), "updates": items, "socials": socials}
+    if data.get("errors"):
+        raise LinkedInError(f"LinkedIn rechazó la consulta de {what}: {str(data['errors'])[:300]}")
+    return data.get("data") or {}
 
 
-_MSG_QUERY = re.compile(r"(messenger(?:Conversations|Messages)[A-Za-z]*\.[0-9a-f]{32})")
+def _profile_id(urn: str) -> Optional[str]:
+    return urn.split(":")[-1] if urn and "fsd_profile" in urn else None
 
 
-def discover_messenger_query_ids(api: Linkedin, max_scripts: int = 60) -> List[str]:
-    """Busca los identificadores de las consultas de mensajería en el código de la web de LinkedIn."""
-    page = api.client.session.get("https://www.linkedin.com/messaging/", timeout=30)
-    found = set(_MSG_QUERY.findall(page.text))
-    scripts = re.findall(r'src="(https://static\.licdn\.com/[^"]+)"', page.text)
-    for url in scripts[:max_scripts]:
-        try:
-            js = requests.get(url, timeout=20, headers={"user-agent": api.client.session.headers.get("user-agent", "")})
-        except requests.RequestException:
-            continue
-        found.update(_MSG_QUERY.findall(js.text))
-    return sorted(found)
-
-
-def messenger_debug(api: Linkedin, me_urn_id: str) -> Dict:
+def conversations(api: Linkedin, me_urn_id: str, count: int = 20) -> List[Dict]:
+    """Conversaciones más recientes de la bandeja principal (mensajería actual, GraphQL)."""
     mailbox = quote(f"urn:li:fsd_profile:{me_urn_id}", safe="")
-    out: Dict = {}
-    res = api._fetch(
-        f"/voyagerMessagingGraphQL/graphql?queryId=messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
-        f"&variables=(query:(predicateUnions:List((conversationCategoryPredicate:(category:PRIMARY_INBOX)))),"
-        f"count:3,mailboxUrn:{mailbox})",
-        headers={"accept": "application/graphql"},
+    data = _graphql(
+        api, _CONVERSATIONS_QUERY,
+        f"(query:(predicateUnions:List((conversationCategoryPredicate:(category:PRIMARY_INBOX)))),"
+        f"count:{count},mailboxUrn:{mailbox})",
+        "conversaciones",
     )
-    out["conversations_status"] = res.status_code
-    out["conversations_body"] = res.text[:3500]
-    m = re.search(r'"entityUrn":"(urn:li:msg_conversation:[^"]+)"', res.text)
-    if m:
-        conv = quote(m.group(1), safe="")
-        r2 = api._fetch(
-            f"/voyagerMessagingGraphQL/graphql?queryId=messengerMessages.5846eeb71c981f11e0134cb6626cc314"
-            f"&variables=(conversationUrn:{conv})",
-            headers={"accept": "application/graphql"},
-        )
-        out["messages_status"] = r2.status_code
-        out["messages_body"] = r2.text[:3500]
-    return out
-
-
-def inbox_debug(api: Linkedin) -> Dict:
-    """Qué responde LinkedIn a la lectura de la bandeja (para diagnosticar)."""
-    res = api._fetch("/messaging/conversations", params={"keyVersion": "LEGACY_INBOX"})
-    return {"legacy_status": res.status_code, "legacy_body": res.text[:600]}
-
-
-def _member_urn_id(member: Dict) -> Optional[str]:
-    mini = ((member or {}).get("com.linkedin.voyager.messaging.MessagingMember") or {}).get("miniProfile") or {}
-    urn = mini.get("entityUrn")
-    return urn.split(":")[-1] if urn else None
-
-
-def conversations(api: Linkedin) -> List[Dict]:
-    data = _json(api._fetch("/messaging/conversations", params={"keyVersion": "LEGACY_INBOX"}), "conversaciones")
     result = []
-    for c in data.get("elements") or []:
-        urn = c.get("entityUrn") or ""
+    for c in (data.get("messengerConversationsByCategoryQuery") or {}).get("elements") or []:
+        m = re.search(r"urn:li:msg_conversation:\(urn:li:fsd_profile:[^,]+,([^)]+)\)", c.get("entityUrn") or "")
+        if not m:
+            continue
         result.append(
             {
-                "id": urn.split(":")[-1],
-                "last_activity_ms": c.get("lastActivityAt") or 0,
-                "participants": [p for p in (_member_urn_id(m) for m in c.get("participants") or []) if p],
+                "id": m.group(1),
+                "last_activity_ms": c.get("lastActivityAt") or c.get("lastReadAt") or 0,
+                "participants": [p for p in (_profile_id(x.get("hostIdentityUrn") or "")
+                                             for x in c.get("conversationParticipants") or []) if p],
             }
         )
     return result
 
 
-def conversation_events(api: Linkedin, conversation_id: str) -> List[Dict]:
-    data = _json(api._fetch(f"/messaging/conversations/{conversation_id}/events"), "mensajes")
+def conversation_events(api: Linkedin, conversation_id: str, me_urn_id: str) -> List[Dict]:
+    conv = quote(f"urn:li:msg_conversation:(urn:li:fsd_profile:{me_urn_id},{conversation_id})", safe="")
+    data = _graphql(api, _MESSAGES_QUERY, f"(conversationUrn:{conv})", "mensajes")
     events = []
-    for e in data.get("elements") or []:
-        content = (e.get("eventContent") or {}).get("com.linkedin.voyager.messaging.event.MessageEvent") or {}
-        text = (content.get("attributedBody") or {}).get("text") or content.get("body") or ""
-        if not text.strip():
+    for e in (data.get("messengerMessagesBySyncToken") or {}).get("elements") or []:
+        text = ((e.get("body") or {}).get("text") or "").strip()
+        if not text:
             continue
         events.append(
             {
-                "urn": e.get("entityUrn") or e.get("dashEntityUrn"),
-                "created_ms": e.get("createdAt") or 0,
-                "from": _member_urn_id(e.get("from") or {}),
-                "text": text.strip(),
+                "urn": e.get("entityUrn") or e.get("backendUrn"),
+                "created_ms": e.get("deliveredAt") or 0,
+                "from": _profile_id((e.get("sender") or {}).get("hostIdentityUrn") or ""),
+                "text": text,
             }
         )
     events.sort(key=lambda x: x["created_ms"])

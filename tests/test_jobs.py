@@ -133,10 +133,10 @@ class FakeLinkedIn:
         monkeypatch.setattr(li, "network_distance", lambda api, pid: "DISTANCE_1" if pid in self.accepted else "DISTANCE_2")
         monkeypatch.setattr(li, "send_message", lambda api, urn, text, conv=None, me_urn_id=None: self.sent.append((urn, text)))
         monkeypatch.setattr(li, "me", lambda api: {"urn_id": ME, "name": "Enrique"})
-        monkeypatch.setattr(li, "conversations", lambda api: [
+        monkeypatch.setattr(li, "conversations", lambda api, me=None: [
             {"id": f"2-{urn}", "last_activity_ms": max(e["created_ms"] for e in evs), "participants": [ME, urn]}
             for urn, evs in self.inbox.items()])
-        monkeypatch.setattr(li, "conversation_events", lambda api, cid: self.inbox[cid[2:]])
+        monkeypatch.setattr(li, "conversation_events", lambda api, cid, me=None: self.inbox[cid[2:]])
         monkeypatch.setattr(li, "profile_posts", lambda api, urn, count=3: [
             {"post_urn": LEAD_OLD, "post_url": "u", "author_name": "Lead", "author_headline": "CEO",
              "post_text": "Post antiguo", "post_age": "3 meses •"},
@@ -708,3 +708,15 @@ def test_feed_uses_post_thread_not_feed_event():
     posts = li.feed_posts(Api(), limit=5)
     assert [p["post_urn"] for p in posts] == [f"urn:li:activity:{post_id}"]
     assert li.post_created_at(posts[0])  # la fecha del hilo cuadra con "1 día"
+
+
+def test_old_messages_are_not_replies(env):
+    db, fake = env
+    lead = db.insert("sdr_leads", {"urn_id": "ACoAAOLD", "full_name": "Antigua", "status": "messaged",
+                                   "campaign_id": db.select("sdr_campaigns")[0]["id"],
+                                   "invited_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()})[0]
+    old_ms = int((datetime.now(timezone.utc) - timedelta(days=400)).timestamp() * 1000)
+    fake.inbox["ACoAAOLD"] = [{"urn": "viejo", "created_ms": old_ms, "from": "ACoAAOLD", "text": "Hola Enrique, ¿qué tal?"}]
+    r = sdr(db).sync_inbox()
+    assert r["items"] == [] and db.one("sdr_leads", {"id": f"eq.{lead['id']}"})["status"] == "messaged"
+    assert db.count("sdr_messages", {"lead_id": f"eq.{lead['id']}", "direction": "eq.in"}) == 1  # queda como historial
