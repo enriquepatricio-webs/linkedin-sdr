@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 def now_iso() -> str:
@@ -26,6 +28,11 @@ class DB:
             raise DBError("Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY")
         self.base = url.rstrip("/") + "/rest/v1"
         self.session = requests.Session()
+        # Mientras se espera a LinkedIn (por el proxy) la conexión a Supabase se queda muerta y la
+        # siguiente petición se colgaba 30 s. Se reintenta con una conexión nueva y menos espera.
+        retry = Retry(total=3, connect=3, read=2, status=2, backoff_factor=0.5,
+                      status_forcelist=(502, 503, 504), allowed_methods=None, raise_on_status=False)
+        self.session.mount("https://", HTTPAdapter(max_retries=retry))
         self.session.headers.update({"apikey": key, "Content-Type": "application/json"})
         # Las claves nuevas (sb_secret_...) no son JWT: sólo van en apikey.
         if key.startswith("eyJ"):
@@ -51,7 +58,7 @@ class DB:
             params["order"] = order
         if limit:
             params["limit"] = limit
-        return self._check(self.session.get(f"{self.base}/{table}", params=params, timeout=30)) or []
+        return self._check(self.session.get(f"{self.base}/{table}", params=params, timeout=(5, 15))) or []
 
     def one(self, table: str, filters: Dict[str, Any], columns: str = "*") -> Optional[Dict]:
         rows = self.select(table, filters, limit=1, columns=columns)
@@ -63,7 +70,7 @@ class DB:
             f"{self.base}/{table}",
             params=params,
             headers={"Prefer": "count=exact", "Range": "0-0"},
-            timeout=30,
+            timeout=(5, 15),
         )
         if res.status_code >= 300:
             raise DBError(f"{res.status_code} count {table}")
@@ -87,7 +94,7 @@ class DB:
             params=params,
             json=rows,
             headers={"Prefer": ",".join(prefer)},
-            timeout=30,
+            timeout=(5, 15),
         )
         return self._check(res) or []
 
@@ -101,6 +108,6 @@ class DB:
             params=filters,
             json=values,
             headers={"Prefer": "return=representation"},
-            timeout=30,
+            timeout=(5, 15),
         )
         return self._check(res) or []
