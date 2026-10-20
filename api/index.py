@@ -18,6 +18,7 @@ from pydantic import BaseModel  # noqa: E402
 from _sdr.db import DBError  # noqa: E402
 from _sdr.jobs import SDR, JobError  # noqa: E402
 from _sdr.li import LinkedInError  # noqa: E402
+from _sdr.li import feed_debug as li_feed_debug  # noqa: E402
 from _sdr.li import inbox_debug as li_inbox_debug  # noqa: E402
 
 app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -228,6 +229,11 @@ def check_connections(body: Run = Run()):
 @app.get("/api/py/linkedin/inbox-debug", dependencies=[Depends(auth)])
 def inbox_debug():
     return {"ok": True, **li_inbox_debug(SDR().api)}
+
+
+@app.get("/api/py/linkedin/feed-debug", dependencies=[Depends(auth)])
+def feed_debug(count: int = 4):
+    return {"ok": True, **li_feed_debug(SDR().api, count=max(1, min(count, 10)))}
 
 
 @app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])

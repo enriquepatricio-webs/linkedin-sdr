@@ -433,6 +433,29 @@ def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optiona
         raise LinkedInError(f"No se pudo enviar ({res.status_code}): {res.text[:200]}")
 
 
+def feed_debug(api: Linkedin, count: int = 4) -> Dict:
+    """Estructura en bruto de las primeras publicaciones del feed (para diagnosticar los me gusta)."""
+    res = api._fetch(
+        "/feed/updatesV2", params={"count": count, "q": "chronFeed", "start": 0},
+        headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+    )
+    data = res.json()
+    items = []
+    for i in data.get("included") or []:
+        if "UpdateV2" not in str(i.get("$type")):
+            continue
+        items.append({
+            "entityUrn": i.get("entityUrn"),
+            "updateMetadata": i.get("updateMetadata"),
+            "socialDetail": i.get("*socialDetail") or i.get("socialDetail"),
+            "keys": sorted(i.keys()),
+            "urns": sorted(set(re.findall(r"urn:li:(?:ugcPost|share|activity):\d+", json.dumps(i))))[:10],
+        })
+    socials = [{k: v for k, v in i.items() if k in ("entityUrn", "threadId", "urn", "$type", "dashEntityUrn")}
+               for i in data.get("included") or [] if "SocialDetail" in str(i.get("$type"))][:6]
+    return {"status": res.status_code, "elements": (data.get("data") or {}).get("*elements"), "updates": items, "socials": socials}
+
+
 def inbox_debug(api: Linkedin) -> Dict:
     """Qué responde LinkedIn a la lectura de la bandeja (para diagnosticar)."""
     res = api._fetch("/messaging/conversations", params={"keyVersion": "LEGACY_INBOX"})
