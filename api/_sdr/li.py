@@ -476,15 +476,25 @@ def discover_messenger_query_ids(api: Linkedin, max_scripts: int = 60) -> List[s
 
 def messenger_debug(api: Linkedin, me_urn_id: str) -> Dict:
     mailbox = quote(f"urn:li:fsd_profile:{me_urn_id}", safe="")
-    out = {"tried": {}}
-    for qid in ["messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"]:
-        res = api._fetch(f"/voyagerMessagingGraphQL/graphql?queryId={qid}&variables=(mailboxUrn:{mailbox})",
-                         headers={"accept": "application/graphql"})
-        out["tried"][qid] = {"status": res.status_code, "body": res.text[:400]}
-    try:
-        out["discovered"] = discover_messenger_query_ids(api)
-    except Exception as e:  # noqa: BLE001
-        out["discovered_error"] = str(e)[:300]
+    out: Dict = {}
+    res = api._fetch(
+        f"/voyagerMessagingGraphQL/graphql?queryId=messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
+        f"&variables=(query:(predicateUnions:List((conversationCategoryPredicate:(category:PRIMARY_INBOX)))),"
+        f"count:3,mailboxUrn:{mailbox})",
+        headers={"accept": "application/graphql"},
+    )
+    out["conversations_status"] = res.status_code
+    out["conversations_body"] = res.text[:3500]
+    m = re.search(r'"entityUrn":"(urn:li:msg_conversation:[^"]+)"', res.text)
+    if m:
+        conv = quote(m.group(1), safe="")
+        r2 = api._fetch(
+            f"/voyagerMessagingGraphQL/graphql?queryId=messengerMessages.5846eeb71c981f11e0134cb6626cc314"
+            f"&variables=(conversationUrn:{conv})",
+            headers={"accept": "application/graphql"},
+        )
+        out["messages_status"] = r2.status_code
+        out["messages_body"] = r2.text[:3500]
     return out
 
 
