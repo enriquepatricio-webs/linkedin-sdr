@@ -341,8 +341,12 @@ class SDR:
             return {"ok": True, "skipped": reason, "items": []}
         if not (self.settings.get("company_pitch") or "").strip():
             return {"ok": False, "error": "Describe la empresa en Ajustes antes de cualificar", "items": []}
+        active = self._active_campaigns()
+        if not active:
+            return {"ok": True, "skipped": "no hay campañas activas", "items": []}
         leads = self.db.select(
-            "sdr_leads", {"status": "eq.new", "or": _unlocked()}, order="created_at.asc", limit=limit
+            "sdr_leads", {"status": "eq.new", "or": _unlocked(), "campaign_id": _in(active)},
+            order="created_at.asc", limit=limit,
         )
         items = []
         for lead in leads:
@@ -401,6 +405,11 @@ class SDR:
 
     # ---------- 3. invitaciones ----------
 
+    def _active_campaigns(self) -> List[str]:
+        """Las campañas en pausa no cualifican ni invitan a lo que tengan en cola (los ya
+        conectados siguen con su secuencia de mensajes)."""
+        return [c["id"] for c in self.db.select("sdr_campaigns", {"status": "eq.active"}, columns="id")]
+
     def _fair_pick(self, ready: List[Dict]) -> List[Dict]:
         """Reparte el cupo diario: el siguiente sale de la campaña que menos invitaciones lleva hoy
         (y dentro de ella, el lead que lleva más tiempo esperando)."""
@@ -427,7 +436,10 @@ class SDR:
         if lead_id:
             leads = self.db.select("sdr_leads", {"id": f"eq.{lead_id}", "status": _in(("to_invite", "invite_review"))})
         else:
-            leads = self._fair_pick(self.db.select("sdr_leads", {"status": "eq.to_invite"}, order="updated_at.asc", limit=100))
+            active = self._active_campaigns()
+            ready = self.db.select("sdr_leads", {"status": "eq.to_invite", "campaign_id": _in(active)},
+                                   order="updated_at.asc", limit=100) if active else []
+            leads = self._fair_pick(ready)
         if not leads:
             return {"ok": True, "skipped": "no hay leads listos para invitar"}
         lead = leads[0]

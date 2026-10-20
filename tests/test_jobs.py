@@ -720,3 +720,16 @@ def test_old_messages_are_not_replies(env):
     r = sdr(db).sync_inbox()
     assert r["items"] == [] and db.one("sdr_leads", {"id": f"eq.{lead['id']}"})["status"] == "messaged"
     assert db.count("sdr_messages", {"lead_id": f"eq.{lead['id']}", "direction": "eq.in"}) == 1  # queda como historial
+
+
+def test_paused_campaigns_do_not_invite_or_qualify(env):
+    db, fake = env
+    camp = db.select("sdr_campaigns")[0]
+    db.insert("sdr_leads", {"campaign_id": camp["id"], "urn_id": "UP1", "full_name": "En cola", "status": "to_invite",
+                            "connection_note": "hola"})
+    db.insert("sdr_leads", {"campaign_id": camp["id"], "urn_id": "UP2", "full_name": "Nueva", "status": "new"})
+    db.update("sdr_campaigns", {"id": f"eq.{camp['id']}"}, {"status": "paused"})
+    assert sdr(db).invite(force=True)["skipped"] == "no hay leads listos para invitar" and fake.invites == []
+    assert sdr(db).next_to_qualify(force=True)["skipped"] == "no hay campañas activas"
+    db.update("sdr_campaigns", {"id": f"eq.{camp['id']}"}, {"status": "active"})
+    assert sdr(db).invite(force=True)["invited"] == "En cola"

@@ -35,14 +35,14 @@ def _style(s: Dict, campaign: Dict) -> str:
     if s.get("extra_instructions"):
         parts.append(f"Instrucciones generales: {s['extra_instructions']}")
     if campaign.get("ai_instructions"):
-        parts.append(f"Instrucciones de la campaña: {campaign['ai_instructions']}")
+        parts.append(f"Instrucciones de la campaña (mandan sobre las generales): {campaign['ai_instructions']}")
     return "\n".join(parts)
 
 
 def _icp(s: Dict, campaign: Dict) -> str:
     parts = [f"Cliente ideal: {s.get('icp') or '(sin definir)'}"]
     if campaign.get("icp_notes"):
-        parts.append(f"Matices de esta campaña: {campaign['icp_notes']}")
+        parts.append(f"Cliente ideal de esta campaña (manda sobre el general si se contradicen): {campaign['icp_notes']}")
     return "\n".join(parts)
 
 
