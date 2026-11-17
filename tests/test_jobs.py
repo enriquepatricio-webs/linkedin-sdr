@@ -733,3 +733,13 @@ def test_paused_campaigns_do_not_invite_or_qualify(env):
     assert sdr(db).next_to_qualify(force=True)["skipped"] == "no hay campañas activas"
     db.update("sdr_campaigns", {"id": f"eq.{camp['id']}"}, {"status": "active"})
     assert sdr(db).invite(force=True)["invited"] == "En cola"
+
+
+def test_campaign_language_overrides_settings():
+    from _sdr import prompts
+
+    s = {"language": "es", "company_name": "X", "sender_name": "Enrique", "tone": "cercano"}
+    lead = {"profile_text": "CEO of a K-beauty brand"}
+    assert "inglés" in prompts.qualify(s, {"language": "en"}, lead)["system_prompt"]
+    assert "Idioma: español de España" in prompts.qualify(s, {}, lead)["system_prompt"]
+    assert "inglés" in prompts.message(s, {"language": "en", "followup_delays_days": [4]}, lead, "first_message", 0, [])["system_prompt"]

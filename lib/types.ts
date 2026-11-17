@@ -71,6 +71,7 @@ export type Campaign = {
   pipeline_buffer: number;
   icp_notes: string;
   ai_instructions: string;
+  language: string | null;
   send_connection_note: boolean;
   first_message_delay_hours: number;
   followup_delays_days: number[];

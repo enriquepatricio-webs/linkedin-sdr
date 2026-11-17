@@ -27,9 +27,16 @@ def _company(s: Dict) -> str:
     return "\n".join(parts)
 
 
+def _lang(s: Dict, campaign: Dict) -> str:
+    """El idioma de la campaña manda sobre el de Ajustes (p. ej. inglés para mercados de fuera)."""
+    code = (campaign or {}).get("language") or s.get("language") or "es"
+    return LANGS.get(code, code)
+
+
 def _style(s: Dict, campaign: Dict) -> str:
+    lang = _lang(s, campaign)
     parts = [
-        f"Idioma: {LANGS.get(s.get('language'), s.get('language'))}.",
+        f"Idioma: {lang}. Escribe todo el texto que devuelvas en {lang}, aunque estas instrucciones estén en español.",
         f"Tono: {s.get('tone')}",
     ]
     if s.get("extra_instructions"):

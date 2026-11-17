@@ -172,6 +172,7 @@ export async function saveCampaign(_: ActionState, fd: FormData): Promise<Action
     pipeline_buffer: int(fd, "pipeline_buffer", 40),
     icp_notes: str(fd, "icp_notes"),
     ai_instructions: str(fd, "ai_instructions"),
+    language: str(fd, "language") || null,
     send_connection_note: fd.get("send_connection_note") === "on",
     first_message_delay_hours: int(fd, "first_message_delay_hours", 1),
     followup_delays_days: list(fd, "followup_delays_days")

@@ -99,6 +99,13 @@ export function CampaignForm({ campaign }: { campaign: Partial<Campaign> }) {
         <Field label="Instrucciones de mensajes" hint="Ángulo, caso de éxito a mencionar, qué evitar…">
           <textarea name="ai_instructions" defaultValue={campaign.ai_instructions} rows={3} className={input} />
         </Field>
+        <Field label="Idioma de los mensajes" hint="Notas de invitación, mensajes y respuestas de esta campaña">
+          <select name="language" defaultValue={campaign.language ?? ""} className={input}>
+            <option value="">El de Ajustes</option>
+            <option value="es">Español</option>
+            <option value="en">Inglés</option>
+          </select>
+        </Field>
       </section>
 
       <section className="space-y-4">
