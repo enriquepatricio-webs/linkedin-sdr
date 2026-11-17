@@ -244,7 +244,7 @@ def profile_locale_add(locale: str, headline: str, summary: str):
     if not current:
         raise HTTPException(status_code=502, detail="No se pudo leer el perfil")
     result = li_add_profile_locale(sdr.api, current, locale, headline, summary)
-    return {"ok": result["status"] in (200, 201, 204), **result, "after": li_profile_locales(sdr.api, public_id).get("profile")}
+    return {"ok": result["status"] in (200, 201, 202, 204), **result, "after": li_profile_locales(sdr.api, public_id).get("profile")}
 
 
 @app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])
