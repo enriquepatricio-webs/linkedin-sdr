@@ -18,6 +18,7 @@ from pydantic import BaseModel  # noqa: E402
 from _sdr.db import DBError  # noqa: E402
 from _sdr.jobs import SDR, JobError  # noqa: E402
 from _sdr.li import LinkedInError  # noqa: E402
+from _sdr.li import own_profile_locales as li_profile_locales  # noqa: E402
 
 app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
@@ -222,6 +223,12 @@ def invite(body: Run = Run()):
 @app.post("/api/py/jobs/check-connections", dependencies=[Depends(auth)])
 def check_connections(body: Run = Run()):
     return SDR().check_connections(limit=min(body.limit, 25), force=body.force)
+
+
+@app.get("/api/py/linkedin/profile-locales", dependencies=[Depends(auth)])
+def profile_locales():
+    sdr = SDR()
+    return {"ok": True, **li_profile_locales(sdr.api, (sdr.settings.get("li_profile") or {}).get("public_id") or "")}
 
 
 @app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])

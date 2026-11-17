@@ -434,6 +434,28 @@ def send_message(api: Linkedin, urn_id: str, text: str, conversation_id: Optiona
         raise LinkedInError(f"No se pudo enviar ({res.status_code}): {res.text[:200]}")
 
 
+def own_profile_locales(api: Linkedin, public_id: str) -> Dict:
+    """Textos del perfil propio por idioma (sólo lectura), para añadir uno en otro idioma sin tocar el principal."""
+    res = api._fetch(
+        "/identity/dash/profiles",
+        params={"q": "memberIdentity", "memberIdentity": public_id,
+                "decorationId": "com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-93"},
+        headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+    )
+    out: Dict = {"status": res.status_code}
+    try:
+        data = res.json()
+    except ValueError:
+        return {**out, "body": res.text[:300]}
+    for item in data.get("included") or []:
+        if public_id in str(item.get("publicIdentifier")):
+            keys = ("entityUrn", "versionTag", "supportedLocales", "primaryLocale", "headline", "summary",
+                    "multiLocaleHeadline", "multiLocaleSummary", "multiLocaleFirstName", "multiLocaleLastName")
+            out["profile"] = {k: item.get(k) for k in keys}
+            break
+    return out
+
+
 _CONVERSATIONS_QUERY = "messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
 _MESSAGES_QUERY = "messengerMessages.5846eeb71c981f11e0134cb6626cc314"
 
