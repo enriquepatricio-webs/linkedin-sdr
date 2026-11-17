@@ -4,6 +4,7 @@ n8n y el panel la llaman con la cabecera x-api-key = SDR_API_KEY.
 """
 
 import hmac
+import re
 import os
 import sys
 from typing import Any, Dict, List, Optional
@@ -18,6 +19,7 @@ from pydantic import BaseModel  # noqa: E402
 from _sdr.db import DBError  # noqa: E402
 from _sdr.jobs import SDR, JobError  # noqa: E402
 from _sdr.li import LinkedInError  # noqa: E402
+from _sdr.li import add_profile_locale as li_add_profile_locale  # noqa: E402
 from _sdr.li import own_profile_locales as li_profile_locales  # noqa: E402
 
 app = FastAPI(title="LinkedIn SDR", docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -229,6 +231,20 @@ def check_connections(body: Run = Run()):
 def profile_locales():
     sdr = SDR()
     return {"ok": True, **li_profile_locales(sdr.api, (sdr.settings.get("li_profile") or {}).get("public_id") or "")}
+
+
+@app.get("/api/py/linkedin/profile-locales/add", dependencies=[Depends(auth)])
+def profile_locale_add(locale: str, headline: str, summary: str):
+    """Añade una versión del perfil en otro idioma. Lanzado a mano (GET con la clave de la API)."""
+    if not re.fullmatch(r"[a-z]{2}_[A-Z]{2}", locale) or len(headline) > 220 or len(summary) > 2600:
+        raise HTTPException(status_code=400, detail="Idioma, titular (máx. 220) o extracto (máx. 2600) no válidos")
+    sdr = SDR()
+    public_id = (sdr.settings.get("li_profile") or {}).get("public_id") or ""
+    current = li_profile_locales(sdr.api, public_id).get("profile")
+    if not current:
+        raise HTTPException(status_code=502, detail="No se pudo leer el perfil")
+    result = li_add_profile_locale(sdr.api, current, locale, headline, summary)
+    return {"ok": result["status"] in (200, 201, 204), **result, "after": li_profile_locales(sdr.api, public_id).get("profile")}
 
 
 @app.get("/api/py/jobs/check-connections", dependencies=[Depends(auth)])

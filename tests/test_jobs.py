@@ -743,3 +743,32 @@ def test_campaign_language_overrides_settings():
     assert "inglés" in prompts.qualify(s, {"language": "en"}, lead)["system_prompt"]
     assert "Idioma: español de España" in prompts.qualify(s, {}, lead)["system_prompt"]
     assert "inglés" in prompts.message(s, {"language": "en", "followup_delays_days": [4]}, lead, "first_message", 0, [])["system_prompt"]
+
+
+def test_add_profile_locale_keeps_spanish():
+    import json as _json
+
+    class Res:
+        status_code = 200
+        text = "{}"
+
+    class Api:
+        calls = []
+
+        def _post(self, uri, **kw):
+            self.calls.append((uri, kw))
+            return Res()
+
+    profile = {"entityUrn": "urn:li:fsd_profile:ACoAAME", "versionTag": "123",
+               "supportedLocales": [{"language": "es", "country": "ES", "$type": "x"}],
+               "multiLocaleFirstName": {"es_ES": "Enrique"}, "multiLocaleLastName": {"es_ES": "Patricio"},
+               "multiLocaleHeadline": {"es_ES": "CEO de X"}, "multiLocaleSummary": {"es_ES": "Hola"}}
+    api = Api()
+    li.add_profile_locale(api, profile, "en_US", "CEO at X", "Hello")
+    uri, kw = api.calls[-1]
+    s = _json.loads(kw["data"])["patch"]["$set"]
+    assert uri == "/voyagerIdentityDashProfiles/urn%3Ali%3Afsd_profile%3AACoAAME" and kw["params"] == {"versionTag": "123"}
+    assert s["supportedLocales"] == [{"language": "es", "country": "ES"}, {"language": "en", "country": "US"}]
+    assert s["multiLocaleHeadline"] == {"es_ES": "CEO de X", "en_US": "CEO at X"}
+    assert s["multiLocaleSummary"] == {"es_ES": "Hola", "en_US": "Hello"}
+    assert s["multiLocaleFirstName"] == {"es_ES": "Enrique", "en_US": "Enrique"}

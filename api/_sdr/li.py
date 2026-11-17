@@ -456,6 +456,35 @@ def own_profile_locales(api: Linkedin, public_id: str) -> Dict:
     return out
 
 
+def add_profile_locale(api: Linkedin, profile: Dict, locale: str, headline: str, summary: str) -> Dict:
+    """Añade al perfil propio una versión en otro idioma (p. ej. en_US) sin tocar la principal:
+    los textos de los idiomas que ya había se envían tal cual."""
+    language, country = locale.split("_")
+    locales = [{"language": x["language"], "country": x.get("country")} for x in profile.get("supportedLocales") or []]
+    if not any(x["language"] == language and x.get("country") == country for x in locales):
+        locales.append({"language": language, "country": country})
+
+    def with_locale(field: str, value: str) -> Dict:
+        return {**(profile.get(field) or {}), locale: value}
+
+    first = next(iter((profile.get("multiLocaleFirstName") or {}).values()), "")
+    last = next(iter((profile.get("multiLocaleLastName") or {}).values()), "")
+    payload = {"patch": {"$set": {
+        "supportedLocales": locales,
+        "multiLocaleFirstName": with_locale("multiLocaleFirstName", first),
+        "multiLocaleLastName": with_locale("multiLocaleLastName", last),
+        "multiLocaleHeadline": with_locale("multiLocaleHeadline", headline),
+        "multiLocaleSummary": with_locale("multiLocaleSummary", summary),
+    }}}
+    res = api._post(
+        f"/voyagerIdentityDashProfiles/{quote(profile['entityUrn'], safe='')}",
+        params={"versionTag": profile["versionTag"]},
+        data=json.dumps(payload),
+        headers={"content-type": "application/json"},
+    )
+    return {"status": res.status_code, "body": res.text[:400]}
+
+
 _CONVERSATIONS_QUERY = "messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
 _MESSAGES_QUERY = "messengerMessages.5846eeb71c981f11e0134cb6626cc314"
 
